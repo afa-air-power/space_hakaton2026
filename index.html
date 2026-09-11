@@ -1,202 +1,708 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>CosmoGrid — устойчивые спутниковые группировки</title>
-<style>
-:root{
-  --bg:#05070b;--panel:rgba(11,16,25,.72);--panel2:rgba(17,24,38,.72);
-  --line:rgba(255,255,255,.18);--line2:rgba(255,255,255,.28);
-  --text:#f5f7fb;--muted:#aab4c5;--accent:#8bd3ff;--good:#7ff0ae;--warn:#ffd479;--bad:#ff7f9d;
-}
-*{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:14px/1.35 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-body{background:
- radial-gradient(circle at 15% 15%,rgba(55,106,170,.14),transparent 28%),
- radial-gradient(circle at 80% 85%,rgba(95,53,170,.12),transparent 30%),#05070b}
-button,input,select{font:inherit}
-button,.file-btn,.chip{
- border:1px solid rgba(255,255,255,.35);border-radius:999px;
- color:var(--text);background:rgba(255,255,255,.075);
- backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
- transition:.18s ease;cursor:pointer
-}
-button:hover,.file-btn:hover,.chip:hover{background:rgba(255,255,255,.14);border-color:#fff;transform:translateY(-1px)}
-button:active{transform:translateY(0)}
-button{padding:9px 14px}
-input,select{width:100%;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.055);color:var(--text);padding:9px 10px;outline:none}
-input:focus,select:focus{border-color:rgba(255,255,255,.55)}
-#app{position:relative;width:100%;height:100%}
-#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
-#vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at center,transparent 50%,rgba(0,0,0,.3) 100%)}
-.topbar{position:absolute;top:14px;left:14px;right:14px;display:flex;align-items:center;gap:12px;z-index:10;pointer-events:none}
-.brand{font-size:16px;font-weight:750;letter-spacing:.03em;background:rgba(8,12,19,.62);border:1px solid var(--line);border-radius:18px;padding:10px 14px;backdrop-filter:blur(14px)}
-.brand small{display:block;font-size:10px;color:var(--muted);font-weight:500;letter-spacing:.08em;text-transform:uppercase}
-.spacer{flex:1}
-.topbar>*{pointer-events:auto}
-.hud{position:absolute;top:74px;left:14px;width:315px;bottom:14px;display:flex;flex-direction:column;gap:10px;z-index:9;pointer-events:none}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:12px;backdrop-filter:blur(14px);box-shadow:0 14px 50px rgba(0,0,0,.28)}
-.hud .card{pointer-events:auto}
-h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#cfd7e4}
-.row{display:flex;gap:8px}.row>*{flex:1}
-.lbl{font-size:10px;color:var(--muted);margin:7px 0 4px}
-.metric{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08)}
-.metric:last-child{border-bottom:0}
-.metric b{font-weight:700}
-.status{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--warn);box-shadow:0 0 12px currentColor}
-.kpis{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-.kpi{padding:9px;border-radius:15px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08)}
-.kpi .v{font-size:18px;font-weight:760}.kpi .t{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
-#timeline{position:absolute;left:360px;right:22px;bottom:18px;z-index:9;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:10px 12px;backdrop-filter:blur(14px)}
-#timeRange{width:100%}
-.timelineTop{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px}
-#log{height:90px;overflow:auto;font:10px/1.35 ui-monospace,monospace;color:#c5d0e0;background:rgba(0,0,0,.2);border-radius:12px;padding:8px}
-.badge{padding:3px 8px;border-radius:999px;border:1px solid var(--line);font-size:10px}
-.legend{display:flex;flex-wrap:wrap;gap:8px;font-size:10px;color:var(--muted)}
-.legend span{display:inline-flex;align-items:center;gap:4px}.legend i{width:7px;height:7px;border-radius:50%}
-.small{font-size:10px;color:var(--muted)}
-#toast{position:absolute;left:50%;top:18px;transform:translateX(-50%) translateY(-30px);opacity:0;z-index:30;padding:9px 14px;border:1px solid var(--line2);border-radius:999px;background:rgba(8,12,19,.78);backdrop-filter:blur(14px);transition:.2s}
-#toast.show{opacity:1;transform:translateX(-50%)}
-#drop{position:absolute;inset:0;display:none;place-items:center;z-index:40;background:rgba(3,5,8,.72);backdrop-filter:blur(10px)}
-#drop .box{padding:24px;border:1px dashed rgba(255,255,255,.45);border-radius:24px;background:rgba(255,255,255,.05);text-align:center}
-.progress{height:5px;border-radius:10px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px}
-.progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#86cfff,#d7a6ff);box-shadow:0 0 16px rgba(150,210,255,.7)}
-.range{display:grid;grid-template-columns:1fr 68px;gap:8px;align-items:center}
-input[type=range]{padding:0;accent-color:#dcecff}
-input[type=file]{display:none}
-@media(max-width:900px){
- .hud{width:290px}.topbar{right:8px}.brand{display:none}#timeline{left:14px;right:14px}
-}
-.paramgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.paramgrid label{display:block;font-size:9px;color:#aab4c5;margin-bottom:3px}.paramgrid input{padding:7px 8px}.mini{width:38px;height:38px;padding:0}.overlay{position:absolute;right:18px;top:74px;z-index:12;background:rgba(11,16,25,.72);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:12px;backdrop-filter:blur(14px);width:290px}.hidden{display:none}.coverage{position:absolute;inset:0;pointer-events:none;z-index:4}</style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <title>CosmoGrid — устойчивые спутниковые группировки</title>
+    <style>
+        :root {
+            --bg: #05070b;
+            --panel: rgba(11, 16, 25, .72);
+            --panel2: rgba(17, 24, 38, .72);
+            --line: rgba(255, 255, 255, .18);
+            --line2: rgba(255, 255, 255, .28);
+            --text: #f5f7fb;
+            --muted: #aab4c5;
+            --accent: #8bd3ff;
+            --good: #7ff0ae;
+            --warn: #ffd479;
+            --bad: #ff7f9d;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font: 14px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+        }
+
+        body {
+            background: radial-gradient(circle at 15% 15%, rgba(55, 106, 170, .14), transparent 28%),
+            radial-gradient(circle at 80% 85%, rgba(95, 53, 170, .12), transparent 30%), #05070b
+        }
+
+        button, input, select {
+            font: inherit
+        }
+
+        button, .file-btn, .chip {
+            border: 1px solid rgba(255, 255, 255, .35);
+            border-radius: 999px;
+            color: var(--text);
+            background: rgba(255, 255, 255, .075);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            transition: .18s ease;
+            cursor: pointer
+        }
+
+        button:hover, .file-btn:hover, .chip:hover {
+            background: rgba(255, 255, 255, .14);
+            border-color: #fff;
+            transform: translateY(-1px)
+        }
+
+        button:active {
+            transform: translateY(0)
+        }
+
+        button {
+            padding: 9px 14px
+        }
+
+        input, select {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 13px;
+            background: rgba(255, 255, 255, .055);
+            color: var(--text);
+            padding: 9px 10px;
+            outline: none
+        }
+
+        input:focus, select:focus {
+            border-color: rgba(255, 255, 255, .55)
+        }
+
+        #app {
+            position: relative;
+            width: 100%;
+            height: 100%
+        }
+
+        #gl {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block
+        }
+
+        #vignette {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(circle at center, transparent 50%, rgba(0, 0, 0, .3) 100%)
+        }
+
+        .topbar {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            right: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+            pointer-events: none
+        }
+
+        .brand {
+            font-size: 16px;
+            font-weight: 750;
+            letter-spacing: .03em;
+            background: rgba(8, 12, 19, .62);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 10px 14px;
+            backdrop-filter: blur(14px)
+        }
+
+        .brand small {
+            display: block;
+            font-size: 10px;
+            color: var(--muted);
+            font-weight: 500;
+            letter-spacing: .08em;
+            text-transform: uppercase
+        }
+
+        .spacer {
+            flex: 1
+        }
+
+        .topbar > * {
+            pointer-events: auto
+        }
+
+        .hud {
+            position: absolute;
+            top: 74px;
+            left: 14px;
+            width: 315px;
+            bottom: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 9;
+            pointer-events: none
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 12px;
+            backdrop-filter: blur(14px);
+            box-shadow: 0 14px 50px rgba(0, 0, 0, .28)
+        }
+
+        .hud .card {
+            pointer-events: auto
+        }
+
+        h3 {
+            margin: 0 0 8px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            color: #cfd7e4
+        }
+
+        .row {
+            display: flex;
+            gap: 8px
+        }
+
+        .row > * {
+            flex: 1
+        }
+
+        .lbl {
+            font-size: 10px;
+            color: var(--muted);
+            margin: 7px 0 4px
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, .08)
+        }
+
+        .metric:last-child {
+            border-bottom: 0
+        }
+
+        .metric b {
+            font-weight: 700
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 11px
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--warn);
+            box-shadow: 0 0 12px currentColor
+        }
+
+        .kpis {
+            display: grid;
+            grid-template-columns:1fr 1fr;
+            gap: 7px
+        }
+
+        .kpi {
+            padding: 9px;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, .045);
+            border: 1px solid rgba(255, 255, 255, .08)
+        }
+
+        .kpi .v {
+            font-size: 18px;
+            font-weight: 760
+        }
+
+        .kpi .t {
+            font-size: 9px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .07em
+        }
+
+        #timeline {
+            position: absolute;
+            left: 360px;
+            right: 22px;
+            bottom: 18px;
+            z-index: 9;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 10px 12px;
+            backdrop-filter: blur(14px)
+        }
+
+        #timeRange {
+            width: 100%
+        }
+
+        .timelineTop {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 4px
+        }
+
+        #log {
+            height: 90px;
+            overflow: auto;
+            font: 10px/1.35 ui-monospace, monospace;
+            color: #c5d0e0;
+            background: rgba(0, 0, 0, .2);
+            border-radius: 12px;
+            padding: 8px
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            font-size: 10px
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 10px;
+            color: var(--muted)
+        }
+
+        .legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px
+        }
+
+        .legend i {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%
+        }
+
+        .small {
+            font-size: 10px;
+            color: var(--muted)
+        }
+
+        #toast {
+            position: absolute;
+            left: 50%;
+            top: 18px;
+            transform: translateX(-50%) translateY(-30px);
+            opacity: 0;
+            z-index: 30;
+            padding: 9px 14px;
+            border: 1px solid var(--line2);
+            border-radius: 999px;
+            background: rgba(8, 12, 19, .78);
+            backdrop-filter: blur(14px);
+            transition: .2s
+        }
+
+        #toast.show {
+            opacity: 1;
+            transform: translateX(-50%)
+        }
+
+        #drop {
+            position: absolute;
+            inset: 0;
+            display: none;
+            place-items: center;
+            z-index: 40;
+            background: rgba(3, 5, 8, .72);
+            backdrop-filter: blur(10px)
+        }
+
+        #drop .box {
+            padding: 24px;
+            border: 1px dashed rgba(255, 255, 255, .45);
+            border-radius: 24px;
+            background: rgba(255, 255, 255, .05);
+            text-align: center
+        }
+
+        .progress {
+            height: 5px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, .08);
+            overflow: hidden;
+            margin-top: 8px
+        }
+
+        .progress > i {
+            display: block;
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, #86cfff, #d7a6ff);
+            box-shadow: 0 0 16px rgba(150, 210, 255, .7)
+        }
+
+        .range {
+            display: grid;
+            grid-template-columns:1fr 68px;
+            gap: 8px;
+            align-items: center
+        }
+
+        input[type=range] {
+            padding: 0;
+            accent-color: #dcecff
+        }
+
+        input[type=file] {
+            display: none
+        }
+
+        @media (max-width: 900px) {
+            .hud {
+                width: 290px
+            }
+
+            .topbar {
+                right: 8px
+            }
+
+            .brand {
+                display: none
+            }
+
+            #timeline {
+                left: 14px;
+                right: 14px
+            }
+        }
+
+        .paramgrid {
+            display: grid;
+            grid-template-columns:1fr 1fr;
+            gap: 7px
+        }
+
+        .paramgrid label {
+            display: block;
+            font-size: 9px;
+            color: #aab4c5;
+            margin-bottom: 3px
+        }
+
+        .paramgrid input {
+            padding: 7px 8px
+        }
+
+        .mini {
+            width: 38px;
+            height: 38px;
+            padding: 0
+        }
+
+        .overlay {
+            position: absolute;
+            right: 18px;
+            top: 74px;
+            z-index: 12;
+            background: rgba(11, 16, 25, .72);
+            border: 1px solid rgba(255, 255, 255, .18);
+            border-radius: 20px;
+            padding: 12px;
+            backdrop-filter: blur(14px);
+            width: 290px
+        }
+
+        .hidden {
+            display: none
+        }
+
+        .coverage {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 4
+        }</style>
 </head>
 <body>
 <div id="app">
-<canvas id="gl"></canvas><div id="vignette"></div>
-<div class="topbar">
-  <div class="brand">COSMOGRID <small>constellation resilience lab</small></div>
-  <button id="loadBtn">Загрузить JSON</button><button id="demoBtn">Demo 48</button>
-  <button id="calcBtn">▶ Расчёт</button>
-  <div class="spacer"></div><span class="badge" id="engine">WebGL2</span>
-</div>
-
-<div class="overlay" id="params"><h3>Параметры модели</h3><div class="paramgrid">
-<label>Высота км<input id="xAlt" type="number" min="200" max="1200"></label>
-<label>Наклонение °<input id="xInc" type="number" min="0.1" max="180"></label>
-<label>Угол Земли °<input id="xEarth" type="number"></label>
-<label>Шаг с<input id="xStep" type="number" min="1"></label>
-<label>Горизонт с<input id="xHor" type="number" min="1"></label>
-<label>Мин. возвышение °<input id="xEl" type="number" min="0" max="89"></label>
-<label>ISL км<input id="xIsl" type="number" min="1" max="10000"></label>
-<label>Цель<input id="xTarget" type="number" min="0" max="1" step=".01"></label>
-<label>Ускорение реальности ×<input id="xSpeed" type="number" min="0.1" max="100000" step="0.1" value="1"></label></div>
-<div class="small" style="margin-top:7px">Лимитер интегратора: максимум 1200 отсчётов за кадр. При большем ускорении отсчёты пропускаются, расчётные данные не изменяются.</div>
-<div class="row" style="margin-top:8px"><button id="applyX">Применить</button><button id="resetX">Сброс</button><button id="dumpX">Дамп</button></div></div>
-<div class="overlay hidden" id="track" style="right:324px;width:240px"><h3>◉ Слежение</h3><select id="satTrack"></select><div class="metric"><span>t</span><b id="trT">—</b></div><div class="metric"><span>XYZ</span><b id="trXYZ">—</b></div><button id="untrack" style="margin-top:8px">Сбросить</button></div>
-<canvas id="coverage" class="coverage"></canvas>
-<div class="hud">
-  <div class="card">
-    <h3>Проект</h3>
-    <div class="status"><span class="dot" id="sdot"></span><span id="status">готов</span></div>
-    <div class="lbl">Этап запуска</div>
-    <div class="range"><input id="stage" type="range" min="1" max="3" step="1" value="3"><span class="badge" id="stageVal">3 / 3</span></div>
-    <div class="lbl">Выбранный пункт</div><select id="clientSel"></select>
-    <div class="lbl">Сцена</div>
-    <div class="row"><button id="earthBtn">Земля</button><button id="freeBtn">Свободная</button></div>
-  </div>
-
-  <div class="card">
-    <h3>Параметры</h3>
-    <div class="metric"><span>Орбита</span><b id="alt">550 км</b></div>
-    <div class="metric"><span>Наклонение</span><b id="inc">87°</b></div>
-    <div class="metric"><span>ISL</span><b id="isl">3000 км</b></div>
-    <div class="metric"><span>Шаг</span><b id="step">120 с</b></div>
-    <div class="metric"><span>Горизонт</span><b id="horizonMetric">24:00:00.0</b></div><div class="metric"><span>Реальность</span><b id="speedMetric">×1.0</b></div>
-  </div>
-
-  <div class="card">
-    <h3>Доступность</h3>
-    <div class="kpis">
-      <div class="kpi"><div class="v" id="avail">—</div><div class="t">сквозной путь</div></div>
-      <div class="kpi"><div class="v" id="vis">—</div><div class="t">видимость</div></div>
-      <div class="kpi"><div class="v" id="gap">—</div><div class="t">макс. перерыв</div></div>
-      <div class="kpi"><div class="v" id="hops">—</div><div class="t">переходы</div></div>
+    <canvas id="gl"></canvas>
+    <div id="vignette"></div>
+    <div class="topbar">
+        <div class="brand">COSMOGRID <small>constellation resilience lab</small></div>
+        <button id="loadBtn">Загрузить JSON</button>
+        <button id="demoBtn">Demo 48</button>
+        <button id="calcBtn">▶ Расчёт</button>
+        <div class="spacer"></div>
+        <span class="badge" id="engine">WebGL2</span>
     </div>
-    <div class="progress"><i id="pbar"></i></div>
-  </div>
 
-  <div class="card">
-    <h3>Диагностика</h3>
-    <div class="legend"><span><i style="background:#84d5ff"></i>спутник</span><span><i style="background:#fff"></i>связь</span><span><i style="background:#7ff0ae"></i>маршрут</span><span><i style="background:#ff7f9d"></i>отказ</span></div>
-    <div id="log">Инициализация…</div>
-  </div>
-</div>
+    <div class="overlay" id="params"><h3>Параметры модели</h3>
+        <div class="paramgrid">
+            <label>Высота км<input id="xAlt" type="number" min="200" max="1200"></label>
+            <label>Наклонение °<input id="xInc" type="number" min="0.1" max="180"></label>
+            <label>Угол Земли °<input id="xEarth" type="number"></label>
+            <label>Шаг с<input id="xStep" type="number" min="1"></label>
+            <label>Горизонт с<input id="xHor" type="number" min="1"></label>
+            <label>Мин. возвышение °<input id="xEl" type="number" min="0" max="89"></label>
+            <label>ISL км<input id="xIsl" type="number" min="1" max="10000"></label>
+            <label>Цель<input id="xTarget" type="number" min="0" max="1" step=".01"></label>
+            <label>Ускорение реальности ×<input id="xSpeed" type="number" min="0.1" max="100000" step="0.1"
+                                                value="1"></label></div>
+        <div class="small" style="margin-top:7px">Лимитер интегратора: максимум 1200 отсчётов за кадр. При большем
+            ускорении отсчёты пропускаются, расчётные данные не изменяются.
+        </div>
+        <div class="row" style="margin-top:8px">
+            <button id="applyX">Применить</button>
+            <button id="resetX">Сброс</button>
+            <button id="dumpX">Дамп</button>
+        </div>
+    </div>
+    <div class="overlay hidden" id="track" style="right:324px;width:240px"><h3>◉ Слежение</h3><select
+            id="satTrack"></select>
+        <div class="metric"><span>t</span><b id="trT">—</b></div>
+        <div class="metric"><span>XYZ</span><b id="trXYZ">—</b></div>
+        <button id="untrack" style="margin-top:8px">Сбросить</button>
+    </div>
+    <canvas id="coverage" class="coverage"></canvas>
+    <div class="hud">
+        <div class="card">
+            <h3>Проект</h3>
+            <div class="status"><span class="dot" id="sdot"></span><span id="status">готов</span></div>
+            <div class="lbl">Этап запуска</div>
+            <div class="range"><input id="stage" type="range" min="1" max="3" step="1" value="3"><span class="badge"
+                                                                                                       id="stageVal">3 / 3</span>
+            </div>
+            <div class="lbl">Выбранный пункт</div>
+            <select id="clientSel"></select>
+            <div class="lbl">Сцена</div>
+            <div class="row">
+                <button id="earthBtn">Земля</button>
+                <button id="freeBtn">Свободная</button>
+            </div>
+        </div>
 
-<div id="timeline">
-  <div class="timelineTop"><span id="clock">t = 00:00:00.0</span><span id="calcInfo">48 sats · 720 отсчётов</span></div>
-  <input id="timeRange" type="range" min="0" max="719" step="1" value="0">
-</div>
-<div id="toast"></div>
-<div id="drop"><div class="box"><h2>Перетащите scenario JSON</h2><p class="small">формат cosmo-A-1.0</p><label class="file-btn">Выбрать файл<input type="file" id="fileInput" accept=".json,application/json"></label></div></div>
+        <div class="card">
+            <h3>Параметры</h3>
+            <div class="metric"><span>Орбита</span><b id="alt">550 км</b></div>
+            <div class="metric"><span>Наклонение</span><b id="inc">87°</b></div>
+            <div class="metric"><span>ISL</span><b id="isl">3000 км</b></div>
+            <div class="metric"><span>Шаг</span><b id="step">120 с</b></div>
+            <div class="metric"><span>Горизонт</span><b id="horizonMetric">24:00:00.0</b></div>
+            <div class="metric"><span>Реальность</span><b id="speedMetric">×1.0</b></div>
+        </div>
+
+        <div class="card">
+            <h3>Доступность</h3>
+            <div class="kpis">
+                <div class="kpi">
+                    <div class="v" id="avail">—</div>
+                    <div class="t">сквозной путь</div>
+                </div>
+                <div class="kpi">
+                    <div class="v" id="vis">—</div>
+                    <div class="t">видимость</div>
+                </div>
+                <div class="kpi">
+                    <div class="v" id="gap">—</div>
+                    <div class="t">макс. перерыв</div>
+                </div>
+                <div class="kpi">
+                    <div class="v" id="hops">—</div>
+                    <div class="t">переходы</div>
+                </div>
+            </div>
+            <div class="progress"><i id="pbar"></i></div>
+        </div>
+
+        <div class="card">
+            <h3>Диагностика</h3>
+            <div class="legend"><span><i style="background:#84d5ff"></i>спутник</span><span><i
+                    style="background:#fff"></i>связь</span><span><i style="background:#7ff0ae"></i>маршрут</span><span><i
+                    style="background:#ff7f9d"></i>отказ</span></div>
+            <div id="log">Инициализация…</div>
+        </div>
+    </div>
+
+    <div id="timeline">
+        <div class="timelineTop"><span id="clock">t = 00:00:00.0</span><span id="calcInfo">48 sats · 720 отсчётов</span>
+        </div>
+        <input id="timeRange" type="range" min="0" max="719" step="1" value="0">
+    </div>
+    <div id="toast"></div>
+    <div id="drop">
+        <div class="box"><h2>Перетащите scenario JSON</h2>
+            <p class="small">формат cosmo-A-1.0</p><label class="file-btn">Выбрать файл<input type="file" id="fileInput"
+                                                                                              accept=".json,application/json"></label>
+        </div>
+    </div>
 </div>
 <script>
-"use strict";
-const $=s=>document.querySelector(s);
-const TAU=Math.PI*2, DEG=Math.PI/180;
-const MU_E=398600.435507, R_E=6371, EARTH_T=86164.09054;
-let scenario=null, snapshots=[], stats=null, worker=null, camera={yaw:.35,pitch:.23,dist:3.4}, dragging=false,lastX=0,lastY=0;
+    "use strict";
+    const $ = s => document.querySelector(s);
+    const TAU = Math.PI * 2, DEG = Math.PI / 180;
+    const MU_E = 398600.435507, R_E = 6371, EARTH_T = 86164.09054;
+    let scenario = null, snapshots = [], stats = null, worker = null, camera = {yaw: .35, pitch: .23, dist: 3.4},
+        dragging = false, lastX = 0, lastY = 0;
 
-function toast(t){const e=$("#toast");e.textContent=t;e.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("show"),1700)}
-function log(t){const e=$("#log");e.innerHTML=(new Date().toLocaleTimeString()+"  "+t+"\\n")+e.innerHTML; e.innerHTML=e.innerHTML.slice(0,6500)}
-function demoScenario(){
- const planes=[0,120,240].map((raan_deg,i)=>({id:"P"+(i+1),raan_deg,phase_deg:i*6}));
- const satellites=[]; for(let p=0;p<3;p++) for(let k=0;k<16;k++)
-   satellites.push({id:`S${p+1}-${String(k+1).padStart(2,"0")}`,plane_id:"P"+(p+1),slot_deg:k*22.5,launch_batch:p===0?1:(p===1?2:3)});
- return {
- schema_version:"cosmo-A-1.0",meta:{id:"demo",title:"CosmoGrid Demo"},
- environment:{altitude_km:550,inclination_deg:87,earth_angle0_deg:0,horizon_s:86400,step_s:120,min_elevation_deg:10,isl_range_km:3000,target_availability:.9},
- design:{planes,satellites,launch_stage:3},
- ground_sites:[
-  {id:"C65",name:"Клиент C65",role:"client",lat_deg:69.35,lon_deg:88.2},
-  {id:"C66",name:"Клиент C66",role:"client",lat_deg:71.6,lon_deg:128.9},
-  {id:"C67",name:"Клиент C67",role:"client",lat_deg:64.5,lon_deg:40.5},
-  {id:"G1",name:"Gateway",role:"gateway",lat_deg:55.75,lon_deg:37.62}
- ],failures:[],gateway_outages:[]
- };
-}
-function applyScenario(s){
- scenario=s;
- const e=s.environment,d=s.design;
- $("#alt").textContent=e.altitude_km+" км";$("#inc").textContent=e.inclination_deg+"°";$("#isl").textContent=e.isl_range_km+" км";$("#step").textContent=e.step_s+" с";
- $("#stage").value=d.launch_stage||3; $("#stageVal").textContent=$("#stage").value+" / 3";
- const cs=(s.ground_sites||[]).filter(x=>x.role==="client"); $("#clientSel").innerHTML=cs.map(x=>`<option value="${x.id}">${x.name||x.id}</option>`).join("");
- $("#timeRange").max=Math.max(0,Math.floor(e.horizon_s/e.step_s)-1);$("#calcInfo").textContent=`${d.satellites.length} sats · ${$("#timeRange").max*1+1} отсчётов`;
- log(`Сценарий ${s.meta?.title||s.meta?.id||"loaded"} · ${d.satellites.length} аппаратов`);
-}
-$("#stage").oninput=()=>{$("#stageVal").textContent=$("#stage").value+" / 3";scenario.design.launch_stage=+$("#stage").value; renderFrame(+$("timeRange").value)}
-$("#loadBtn").onclick=()=>$("#fileInput").click();
-$("#fileInput").onchange=async e=>{const f=e.target.files[0];if(!f)return; try{const s=JSON.parse(await f.text());applyScenario(s);toast("JSON загружен");}catch(err){toast("Ошибка JSON");log(err.message)}};
-$("#demoBtn").onclick=()=>{applyScenario(demoScenario());runCalc()};
-$("#calcBtn").onclick=()=>runCalc();
-$("#earthBtn").onclick=()=>{camera={yaw:.35,pitch:.23,dist:3.4};renderFrame(+$("timeRange").value)};
-$("#freeBtn").onclick=()=>{camera={yaw:0.9,pitch:.65,dist:6.5};renderFrame(+$("timeRange").value)};
-$("#timeRange").oninput=()=>renderFrame(+$("timeRange").value);
+    function toast(t) {
+        const e = $("#toast");
+        e.textContent = t;
+        e.classList.add("show");
+        clearTimeout(toast.t);
+        toast.t = setTimeout(() => e.classList.remove("show"), 1700)
+    }
 
-async function runCalc(){
- if(!scenario)applyScenario(demoScenario());
- $("#status").textContent="расчёт…"; $("#sdot").style.color="#ffd479";
- if(worker)worker.terminate();
- worker=new Worker(URL.createObjectURL(new Blob([workerSource],{type:"application/javascript"})));
- worker.onmessage=e=>{
-   const m=e.data;
-   if(m.type==="progress"){ $("#pbar").style.width=(m.p*100).toFixed(1)+"%"; if(m.p>0)$("#status").textContent=`расчёт ${Math.round(m.p*100)}%`; }
-   if(m.type==="done"){snapshots=m.snapshots;stats=m.stats;$("#status").textContent="готов";$("#sdot").style.color="#7ff0ae";$("#avail").textContent=(stats.availability*100).toFixed(1)+"%";$("#vis").textContent=(stats.visibility*100).toFixed(1)+"%";$("#gap").textContent=fmtTime(stats.maxGap);$("#hops").textContent=stats.hops??"—";$("#pbar").style.width="100%";$("#calcInfo").textContent=`${scenario.design.satellites.length} sats · ${snapshots.length} отсчётов`;renderFrame(+$("timeRange").value);log(`Модель жюри готова · доступность ${(stats.availability*100).toFixed(2)}%`);toast("Расчёт завершён");}
-   if(m.type==="error"){log("ERROR "+m.msg);$("#status").textContent="ошибка";toast("Ошибка расчёта")}
- };
- worker.postMessage({scenario:structuredClone(scenario),clientId:$("#clientSel").value});
-}
-const workerSource=String.raw`
+    function log(t) {
+        const e = $("#log");
+        e.innerHTML = (new Date().toLocaleTimeString() + "  " + t + "\\n") + e.innerHTML;
+        e.innerHTML = e.innerHTML.slice(0, 6500)
+    }
+
+    function demoScenario() {
+        const planes = [0, 120, 240].map((raan_deg, i) => ({id: "P" + (i + 1), raan_deg, phase_deg: i * 6}));
+        const satellites = [];
+        for (let p = 0; p < 3; p++) for (let k = 0; k < 16; k++)
+            satellites.push({
+                id: `S${p + 1}-${String(k + 1).padStart(2, "0")}`,
+                plane_id: "P" + (p + 1),
+                slot_deg: k * 22.5,
+                launch_batch: p === 0 ? 1 : (p === 1 ? 2 : 3)
+            });
+        return {
+            schema_version: "cosmo-A-1.0", meta: {id: "demo", title: "CosmoGrid Demo"},
+            environment: {
+                altitude_km: 550,
+                inclination_deg: 87,
+                earth_angle0_deg: 0,
+                horizon_s: 86400,
+                step_s: 120,
+                min_elevation_deg: 10,
+                isl_range_km: 3000,
+                target_availability: .9
+            },
+            design: {planes, satellites, launch_stage: 3},
+            ground_sites: [
+                {id: "C65", name: "Клиент C65", role: "client", lat_deg: 69.35, lon_deg: 88.2},
+                {id: "C66", name: "Клиент C66", role: "client", lat_deg: 71.6, lon_deg: 128.9},
+                {id: "C67", name: "Клиент C67", role: "client", lat_deg: 64.5, lon_deg: 40.5},
+                {id: "G1", name: "Gateway", role: "gateway", lat_deg: 55.75, lon_deg: 37.62}
+            ], failures: [], gateway_outages: []
+        };
+    }
+
+    function applyScenario(s) {
+        scenario = s;
+        const e = s.environment, d = s.design;
+        $("#alt").textContent = e.altitude_km + " км";
+        $("#inc").textContent = e.inclination_deg + "°";
+        $("#isl").textContent = e.isl_range_km + " км";
+        $("#step").textContent = e.step_s + " с";
+        $("#stage").value = d.launch_stage || 3;
+        $("#stageVal").textContent = $("#stage").value + " / 3";
+        const cs = (s.ground_sites || []).filter(x => x.role === "client");
+        $("#clientSel").innerHTML = cs.map(x => `<option value="${x.id}">${x.name || x.id}</option>`).join("");
+        $("#timeRange").max = Math.max(0, Math.floor(e.horizon_s / e.step_s) - 1);
+        $("#calcInfo").textContent = `${d.satellites.length} sats · ${$("#timeRange").max * 1 + 1} отсчётов`;
+        log(`Сценарий ${s.meta?.title || s.meta?.id || "loaded"} · ${d.satellites.length} аппаратов`);
+    }
+
+    $("#stage").oninput = () => {
+        $("#stageVal").textContent = $("#stage").value + " / 3";
+        scenario.design.launch_stage = +$("#stage").value;
+        renderFrame(+$("timeRange").value)
+    }
+    $("#loadBtn").onclick = () => $("#fileInput").click();
+    $("#fileInput").onchange = async e => {
+        const f = e.target.files[0];
+        if (!f) return;
+        try {
+            const s = JSON.parse(await f.text());
+            applyScenario(s);
+            toast("JSON загружен");
+        } catch (err) {
+            toast("Ошибка JSON");
+            log(err.message)
+        }
+    };
+    $("#demoBtn").onclick = () => {
+        applyScenario(demoScenario());
+        runCalc()
+    };
+    $("#calcBtn").onclick = () => runCalc();
+    $("#earthBtn").onclick = () => {
+        camera = {yaw: .35, pitch: .23, dist: 3.4};
+        renderFrame(+$("timeRange").value)
+    };
+    $("#freeBtn").onclick = () => {
+        camera = {yaw: 0.9, pitch: .65, dist: 6.5};
+        renderFrame(+$("timeRange").value)
+    };
+    $("#timeRange").oninput = () => renderFrame(+$("timeRange").value);
+
+    async function runCalc() {
+        if (!scenario) applyScenario(demoScenario());
+        $("#status").textContent = "расчёт…";
+        $("#sdot").style.color = "#ffd479";
+        if (worker) worker.terminate();
+        worker = new Worker(URL.createObjectURL(new Blob([workerSource], {type: "application/javascript"})));
+        worker.onmessage = e => {
+            const m = e.data;
+            if (m.type === "progress") {
+                $("#pbar").style.width = (m.p * 100).toFixed(1) + "%";
+                if (m.p > 0) $("#status").textContent = `расчёт ${Math.round(m.p * 100)}%`;
+            }
+            if (m.type === "done") {
+                snapshots = m.snapshots;
+                stats = m.stats;
+                $("#status").textContent = "готов";
+                $("#sdot").style.color = "#7ff0ae";
+                $("#avail").textContent = (stats.availability * 100).toFixed(1) + "%";
+                $("#vis").textContent = (stats.visibility * 100).toFixed(1) + "%";
+                $("#gap").textContent = fmtTime(stats.maxGap);
+                $("#hops").textContent = stats.hops ?? "—";
+                $("#pbar").style.width = "100%";
+                $("#calcInfo").textContent = `${scenario.design.satellites.length} sats · ${snapshots.length} отсчётов`;
+                renderFrame(+$("timeRange").value);
+                log(`Модель жюри готова · доступность ${(stats.availability * 100).toFixed(2)}%`);
+                toast("Расчёт завершён");
+            }
+            if (m.type === "error") {
+                log("ERROR " + m.msg);
+                $("#status").textContent = "ошибка";
+                toast("Ошибка расчёта")
+            }
+        };
+        worker.postMessage({scenario: structuredClone(scenario), clientId: $("#clientSel").value});
+    }
+
+    const workerSource = String.raw`
 const TAU=Math.PI*2,DEG=Math.PI/180,MU_E=398600.435507,R=6371,T_E=86164.09054;
 function norm(v){let m=Math.hypot(v[0],v[1],v[2]);return m? [v[0]/m,v[1]/m,v[2]/m]:[0,0,0]}
 function add(a,b,k=1){return [a[0]+b[0]*k,a[1]+b[1]*k,a[2]+b[2]*k]}
@@ -243,84 +749,343 @@ self.onmessage=({data})=>{
  }catch(err){postMessage({type:"error",msg:err.stack||String(err)})}
 }`;
 
-// WebGL2 renderer
-const canvas=$("#gl"),gl=canvas.getContext("webgl2",{antialias:true,alpha:false});
-if(!gl){$("#engine").textContent="Canvas2D fallback";toast("WebGL2 недоступен");}
-const vs=`#version 300 es
+    // WebGL2 renderer
+    const canvas = $("#gl"), gl = canvas.getContext("webgl2", {antialias: true, alpha: false});
+    if (!gl) {
+        $("#engine").textContent = "Canvas2D fallback";
+        toast("WebGL2 недоступен");
+    }
+    const vs = `#version 300 es
 in vec3 aPos;in vec3 aColor;uniform mat4 uMVP;out vec3 vColor;void main(){gl_Position=uMVP*vec4(aPos,1.0);gl_PointSize=5.5;vColor=aColor;}`;
-const fs=`#version 300 es
+    const fs = `#version 300 es
 precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=length(gl_PointCoord-vec2(.5));if(d>.5)discard;outColor=vec4(vColor,1.0);}`;
-function sh(type,src){let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s}
-const prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,vs));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(prog);
-const posBuf=gl.createBuffer(),colBuf=gl.createBuffer();
-function resize(){const d=window.devicePixelRatio||1;canvas.width=innerWidth*d;canvas.height=innerHeight*d;gl.viewport(0,0,canvas.width,canvas.height)}
-addEventListener("resize",resize);resize();
-function perspective(fov,asp,n,f){let t=1/Math.tan(fov/2);return [t/asp,0,0,0,0,t,0,0,0,0,(f+n)/(n-f),-1,0,0,(2*f*n)/(n-f),0]}
-function mul(a,b){let o=new Array(16).fill(0);for(let r=0;r<4;r++)for(let c=0;c<4;c++)for(let k=0;k<4;k++)o[c+r*4]+=a[k+r*4]*b[c+k*4];return o}
-function look(eye,tar,up=[0,1,0]){let z=norm3([eye[0]-tar[0],eye[1]-tar[1],eye[2]-tar[2]]),x=norm3(cross(up,z)),y=cross(z,x);return [x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,eye),-dot(y,eye),-dot(z,eye),1]}
-function norm3(a){let m=Math.hypot(...a)||1;return a.map(v=>v/m)} function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]} function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}
-function renderFrame(i){
- if(!gl||!scenario)return;const snap=snapshots[i];if(!snap)return;
- $("#clock").textContent="t = "+fmtTime(snap.t);
- const verts=[],cols=[],scale=1/(R_E+scenario.environment.altitude_km);
- // Earth
- for(let k=0;k<1024;k++){let z=1-2*(k+.5)/1024,a=Math.sqrt(Math.max(0,1-z*z))*6.28318*k*.618,x=Math.cos(a)*a*0.985,y=z*0.985,zz=Math.sin(a)*a*.985;verts.push(x,y,zz);cols.push(.08,.13,.2)}
- const satBase=verts.length/3;
- for(const s of snap.sats){let p=s.p.map(v=>v*scale);verts.push(...p);cols.push(...(s.active?[.52,.83,1]:[1,.3,.5]))}
- // links
- for(const [cid,path] of Object.entries(snap.routes||{}))for(let k=1;k<path.length-1;k++){let a=snap.sats.find(x=>x.id===path[k]),b=snap.sats.find(x=>x.id===path[k+1]);if(a&&b){verts.push(...a.p.map(v=>v*scale),...b.p.map(v=>v*scale));cols.push(.5,1,.7,.5,1,.7)}}
- gl.clearColor(.015,.02,.03,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.useProgram(prog);
- gl.bindBuffer(gl.ARRAY_BUFFER,posBuf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(verts),gl.DYNAMIC_DRAW);
- gl.bindBuffer(gl.ARRAY_BUFFER,colBuf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(cols),gl.DYNAMIC_DRAW);
- const locP=gl.getAttribLocation(prog,"aPos"),locC=gl.getAttribLocation(prog,"aColor");gl.bindBuffer(gl.ARRAY_BUFFER,posBuf);gl.enableVertexAttribArray(locP);gl.vertexAttribPointer(locP,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,colBuf);gl.enableVertexAttribArray(locC);gl.vertexAttribPointer(locC,3,gl.FLOAT,false,0,0);
- let target=[0,0,0]; if(followId&&snap){let fs=snap.sats.find(x=>x.id===followId);if(fs){target=fs.p.map(v=>v*scale);document.getElementById('track').classList.remove('hidden');document.getElementById('trT').textContent=fmtTime(snap.t);document.getElementById('trXYZ').textContent=fs.p.map(v=>v.toFixed(0)).join(' / ')+' km'}} const eye=[target[0]+camera.dist*Math.cos(camera.pitch)*Math.cos(camera.yaw),target[1]+camera.dist*Math.sin(camera.pitch),target[2]+camera.dist*Math.cos(camera.pitch)*Math.sin(camera.yaw)];
- const mvp=mul(perspective(1.0,canvas.width/canvas.height,.01,100),look(eye,target));gl.uniformMatrix4fv(gl.getUniformLocation(prog,"uMVP"),false,new Float32Array(mvp));
- gl.drawArrays(gl.POINTS,0,verts.length/3);
- drawCoverage(snap);
-}
 
-function drawCoverage(snap){if(!coverageOn||!snap)return;cc.clearRect(0,0,innerWidth,innerHeight);const cx=innerWidth/2,cy=innerHeight/2,er=Math.min(innerWidth,innerHeight)*.34/camera.dist;for(const q of snap.sats.filter(x=>x.active)){let p=q.p,rr=Math.hypot(p[0],p[1],p[2])||1,lat=Math.asin(p[2]/rr),lon=Math.atan2(p[1],p[0]),x=cx+Math.cos(lon)*Math.cos(lat)*er,y=cy-Math.sin(lat)*er;let rad=Math.max(14,Math.min(90,er*.28));let g=cc.createRadialGradient(x,y,0,x,y,rad);g.addColorStop(0,'rgba(139,211,255,.16)');g.addColorStop(1,'rgba(139,211,255,0)');cc.fillStyle=g;cc.beginPath();cc.arc(x,y,rad,0,Math.PI*2);cc.fill()}}
+    function sh(type, src) {
+        let s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        return s
+    }
 
-canvas.addEventListener("pointerdown",e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId)});
-canvas.addEventListener("pointerup",()=>dragging=false);
-canvas.addEventListener("pointermove",e=>{if(!dragging)return;camera.yaw+=(e.clientX-lastX)*.006;camera.pitch=Math.max(-1.45,Math.min(1.45,camera.pitch+(e.clientY-lastY)*.006));lastX=e.clientX;lastY=e.clientY;renderFrame(+$("timeRange").value)});
-canvas.addEventListener("wheel",e=>{camera.dist=Math.max(1.15,Math.min(14,camera.dist+e.deltaY*.003));renderFrame(+$("timeRange").value)},{passive:true});
-document.body.addEventListener("dragover",e=>{e.preventDefault();$("#drop").style.display="grid"});
-$("#drop").addEventListener("dragover",e=>e.preventDefault());
-$("#drop").addEventListener("drop",async e=>{e.preventDefault();$("#drop").style.display="none";const f=e.dataTransfer.files[0];if(!f)return;try{applyScenario(JSON.parse(await f.text()));toast("JSON загружен");}catch{toast("Ошибка JSON")}});
-$("#drop").addEventListener("dragleave",e=>{if(e.target===$("#drop"))$("#drop").style.display="none"});
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(prog);
+    const posBuf = gl.createBuffer(), colBuf = gl.createBuffer();
 
-applyScenario(demoScenario()); syncParams(); setTrackList(); renderFrame(0);
+    function resize() {
+        const d = window.devicePixelRatio || 1;
+        canvas.width = innerWidth * d;
+        canvas.height = innerHeight * d;
+        gl.viewport(0, 0, canvas.width, canvas.height)
+    }
 
-// --- v3 controls / animation / full dump ---
-let playing=false, playTimer=null, coverageOn=true, followId=null;
-const cov=document.getElementById('coverage'), cc=cov.getContext('2d');
-const REALITY_MIN=0.1, REALITY_MAX=100000, INTEGRATOR_FRAME_LIMIT=1200;
-let realitySpeed=1;
-function rc(){cov.width=innerWidth*devicePixelRatio;cov.height=innerHeight*devicePixelRatio;cc.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0)} addEventListener('resize',rc);rc();
-function fmtTime(sec){sec=Math.max(0,Number(sec)||0);let h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+s.toFixed(1).padStart(4,'0')}
-function formatSpeed(v){return v<10?v.toFixed(1):v<1000?v.toFixed(0):v.toExponential(1).replace('e+','e')}
-function syncParams(){if(!scenario)return;let e=scenario.environment;for(const [id,v] of Object.entries({xAlt:e.altitude_km,xInc:e.inclination_deg,xEarth:e.earth_angle0_deg,xStep:e.step_s,xHor:e.horizon_s,xEl:e.min_elevation_deg,xIsl:e.isl_range_km,xTarget:e.target_availability}))document.getElementById(id).value=v;document.getElementById('xSpeed').value=realitySpeed;document.getElementById('horizonMetric').textContent=fmtTime(e.horizon_s);document.getElementById('speedMetric').textContent='×'+formatSpeed(realitySpeed)}
-function applyX(){if(!scenario)return;let e=scenario.environment,v={altitude_km:+xAlt.value,inclination_deg:+xInc.value,earth_angle0_deg:+xEarth.value,step_s:+xStep.value,horizon_s:+xHor.value,min_elevation_deg:+xEl.value,isl_range_km:+xIsl.value,target_availability:+xTarget.value},sp=+xSpeed.value;if(v.altitude_km<200||v.altitude_km>1200||v.inclination_deg<=0||v.inclination_deg>180||v.step_s<=0||v.horizon_s%v.step_s||v.horizon_s>172800||v.min_elevation_deg<0||v.min_elevation_deg>=90||v.isl_range_km<=0||v.isl_range_km>10000||v.target_availability<0||v.target_availability>1||!Number.isFinite(sp)||sp<REALITY_MIN||sp>REALITY_MAX){toast('Параметры невалидны');return}Object.assign(e,v);realitySpeed=sp;syncParams();applyScenario(scenario);runCalc()}
-document.getElementById('applyX').onclick=applyX;
-document.getElementById('resetX').onclick=()=>{realitySpeed=1;applyScenario(demoScenario());syncParams();setTrackList();runCalc()};
-document.getElementById('dumpX').onclick=dumpAll;
-document.getElementById('xSpeed').oninput=e=>{let v=Math.min(REALITY_MAX,Math.max(REALITY_MIN,+e.target.value||1));realitySpeed=v;document.getElementById('speedMetric').textContent='×'+formatSpeed(v)};
-function dumpAll(){let payload={schema_version:'cosmo-A-1.0',scenario,results:{stats,snapshots},ui:{reality_speed:realitySpeed,time_format:'HH:MM:SS.0',integrator_frame_limit:INTEGRATOR_FRAME_LIMIT}};let b=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='cosmogrid-full-dump.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-function setTrackList(){let el=document.getElementById('satTrack');el.innerHTML=(scenario?.design?.satellites||[]).map(x=>`<option value="${x.id}">${x.id}</option>`).join('')}
-document.getElementById('untrack').onclick=()=>{followId=null;document.getElementById('track').classList.add('hidden')};
-document.getElementById('satTrack').onchange=()=>{followId=document.getElementById('satTrack').value;document.getElementById('track').classList.remove('hidden');renderFrame(+document.getElementById('timeRange').value)};
-function animate(){if(!playing)return;let r=document.getElementById('timeRange'),max=+r.max,cur=+r.value,advance=Math.max(1,Math.round(realitySpeed));let next=cur+Math.min(advance,INTEGRATOR_FRAME_LIMIT);if(next>max)next=0;r.value=next;renderFrame(next);playTimer=setTimeout(animate,35)}
-document.getElementById('calcBtn').onclick=()=>runCalc();
-document.getElementById('loadBtn').onclick=()=>document.getElementById('fileInput').click();
-document.getElementById('demoBtn').onclick=()=>{applyScenario(demoScenario());syncParams();setTrackList();runCalc()};
-addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();playing=!playing;if(playing)animate()}if(e.key.toLowerCase()==='c'){coverageOn=!coverageOn;renderFrame(+timeRange.value)}if(e.key.toLowerCase()==='f'){followId=document.getElementById('satTrack').value;document.getElementById('track').classList.remove('hidden');renderFrame(+timeRange.value)}});
+    addEventListener("resize", resize);
+    resize();
 
-applyScenario(demoScenario());
-syncParams();
-setTrackList();
-renderFrame(0);
-runCalc();
+    function perspective(fov, asp, n, f) {
+        let t = 1 / Math.tan(fov / 2);
+        return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, (2 * f * n) / (n - f), 0]
+    }
+
+    function mul(a, b) {
+        let o = new Array(16).fill(0);
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) for (let k = 0; k < 4; k++) o[c + r * 4] += a[k + r * 4] * b[c + k * 4];
+        return o
+    }
+
+    function look(eye, tar, up = [0, 1, 0]) {
+        let z = norm3([eye[0] - tar[0], eye[1] - tar[1], eye[2] - tar[2]]), x = norm3(cross(up, z)), y = cross(z, x);
+        return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1]
+    }
+
+    function norm3(a) {
+        let m = Math.hypot(...a) || 1;
+        return a.map(v => v / m)
+    }
+
+    function dot(a, b) {
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    }
+
+    function cross(a, b) {
+        return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+    }
+
+    function renderFrame(i) {
+        if (!gl || !scenario) return;
+        const snap = snapshots[i];
+        if (!snap) return;
+        $("#clock").textContent = "t = " + fmtTime(snap.t);
+        const verts = [], cols = [], scale = 1 / (R_E + scenario.environment.altitude_km);
+        // Earth
+        for (let k = 0; k < 1024; k++) {
+            let z = 1 - 2 * (k + .5) / 1024, a = Math.sqrt(Math.max(0, 1 - z * z)) * 6.28318 * k * .618,
+                x = Math.cos(a) * a * 0.985, y = z * 0.985, zz = Math.sin(a) * a * .985;
+            verts.push(x, y, zz);
+            cols.push(.08, .13, .2)
+        }
+        const satBase = verts.length / 3;
+        for (const s of snap.sats) {
+            let p = s.p.map(v => v * scale);
+            verts.push(...p);
+            cols.push(...(s.active ? [.52, .83, 1] : [1, .3, .5]))
+        }
+        // links
+        for (const [cid, path] of Object.entries(snap.routes || {})) for (let k = 1; k < path.length - 1; k++) {
+            let a = snap.sats.find(x => x.id === path[k]), b = snap.sats.find(x => x.id === path[k + 1]);
+            if (a && b) {
+                verts.push(...a.p.map(v => v * scale), ...b.p.map(v => v * scale));
+                cols.push(.5, 1, .7, .5, 1, .7)
+            }
+        }
+        gl.clearColor(.015, .02, .03, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.enable(gl.DEPTH_TEST);
+        gl.useProgram(prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cols), gl.DYNAMIC_DRAW);
+        const locP = gl.getAttribLocation(prog, "aPos"), locC = gl.getAttribLocation(prog, "aColor");
+        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+        gl.enableVertexAttribArray(locP);
+        gl.vertexAttribPointer(locP, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+        gl.enableVertexAttribArray(locC);
+        gl.vertexAttribPointer(locC, 3, gl.FLOAT, false, 0, 0);
+        let target = [0, 0, 0];
+        if (followId && snap) {
+            let fs = snap.sats.find(x => x.id === followId);
+            if (fs) {
+                target = fs.p.map(v => v * scale);
+                document.getElementById('track').classList.remove('hidden');
+                document.getElementById('trT').textContent = fmtTime(snap.t);
+                document.getElementById('trXYZ').textContent = fs.p.map(v => v.toFixed(0)).join(' / ') + ' km'
+            }
+        }
+        const eye = [target[0] + camera.dist * Math.cos(camera.pitch) * Math.cos(camera.yaw), target[1] + camera.dist * Math.sin(camera.pitch), target[2] + camera.dist * Math.cos(camera.pitch) * Math.sin(camera.yaw)];
+        const mvp = mul(perspective(1.0, canvas.width / canvas.height, .01, 100), look(eye, target));
+        gl.uniformMatrix4fv(gl.getUniformLocation(prog, "uMVP"), false, new Float32Array(mvp));
+        gl.drawArrays(gl.POINTS, 0, verts.length / 3);
+        drawCoverage(snap);
+    }
+
+    function drawCoverage(snap) {
+        if (!coverageOn || !snap) return;
+        cc.clearRect(0, 0, innerWidth, innerHeight);
+        const cx = innerWidth / 2, cy = innerHeight / 2, er = Math.min(innerWidth, innerHeight) * .34 / camera.dist;
+        for (const q of snap.sats.filter(x => x.active)) {
+            let p = q.p, rr = Math.hypot(p[0], p[1], p[2]) || 1, lat = Math.asin(p[2] / rr),
+                lon = Math.atan2(p[1], p[0]), x = cx + Math.cos(lon) * Math.cos(lat) * er, y = cy - Math.sin(lat) * er;
+            let rad = Math.max(14, Math.min(90, er * .28));
+            let g = cc.createRadialGradient(x, y, 0, x, y, rad);
+            g.addColorStop(0, 'rgba(139,211,255,.16)');
+            g.addColorStop(1, 'rgba(139,211,255,0)');
+            cc.fillStyle = g;
+            cc.beginPath();
+            cc.arc(x, y, rad, 0, Math.PI * 2);
+            cc.fill()
+        }
+    }
+
+    canvas.addEventListener("pointerdown", e => {
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        canvas.setPointerCapture(e.pointerId)
+    });
+    canvas.addEventListener("pointerup", () => dragging = false);
+    canvas.addEventListener("pointermove", e => {
+        if (!dragging) return;
+        camera.yaw += (e.clientX - lastX) * .006;
+        camera.pitch = Math.max(-1.45, Math.min(1.45, camera.pitch + (e.clientY - lastY) * .006));
+        lastX = e.clientX;
+        lastY = e.clientY;
+        renderFrame(+$("timeRange").value)
+    });
+    canvas.addEventListener("wheel", e => {
+        camera.dist = Math.max(1.15, Math.min(14, camera.dist + e.deltaY * .003));
+        renderFrame(+$("timeRange").value)
+    }, {passive: true});
+    document.body.addEventListener("dragover", e => {
+        e.preventDefault();
+        $("#drop").style.display = "grid"
+    });
+    $("#drop").addEventListener("dragover", e => e.preventDefault());
+    $("#drop").addEventListener("drop", async e => {
+        e.preventDefault();
+        $("#drop").style.display = "none";
+        const f = e.dataTransfer.files[0];
+        if (!f) return;
+        try {
+            applyScenario(JSON.parse(await f.text()));
+            toast("JSON загружен");
+        } catch {
+            toast("Ошибка JSON")
+        }
+    });
+    $("#drop").addEventListener("dragleave", e => {
+        if (e.target === $("#drop")) $("#drop").style.display = "none"
+    });
+
+    applyScenario(demoScenario());
+    syncParams();
+    setTrackList();
+    renderFrame(0);
+
+    // --- v3 controls / animation / full dump ---
+    let playing = false, playTimer = null, coverageOn = true, followId = null;
+    const cov = document.getElementById('coverage'), cc = cov.getContext('2d');
+    const REALITY_MIN = 0.1, REALITY_MAX = 100000, INTEGRATOR_FRAME_LIMIT = 1200;
+    let realitySpeed = 1;
+
+    function rc() {
+        cov.width = innerWidth * devicePixelRatio;
+        cov.height = innerHeight * devicePixelRatio;
+        cc.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0)
+    }
+
+    addEventListener('resize', rc);
+    rc();
+
+    function fmtTime(sec) {
+        sec = Math.max(0, Number(sec) || 0);
+        let h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+        return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + s.toFixed(1).padStart(4, '0')
+    }
+
+    function formatSpeed(v) {
+        return v < 10 ? v.toFixed(1) : v < 1000 ? v.toFixed(0) : v.toExponential(1).replace('e+', 'e')
+    }
+
+    function syncParams() {
+        if (!scenario) return;
+        let e = scenario.environment;
+        for (const [id, v] of Object.entries({
+            xAlt: e.altitude_km,
+            xInc: e.inclination_deg,
+            xEarth: e.earth_angle0_deg,
+            xStep: e.step_s,
+            xHor: e.horizon_s,
+            xEl: e.min_elevation_deg,
+            xIsl: e.isl_range_km,
+            xTarget: e.target_availability
+        })) document.getElementById(id).value = v;
+        document.getElementById('xSpeed').value = realitySpeed;
+        document.getElementById('horizonMetric').textContent = fmtTime(e.horizon_s);
+        document.getElementById('speedMetric').textContent = '×' + formatSpeed(realitySpeed)
+    }
+
+    function applyX() {
+        if (!scenario) return;
+        let e = scenario.environment, v = {
+            altitude_km: +xAlt.value,
+            inclination_deg: +xInc.value,
+            earth_angle0_deg: +xEarth.value,
+            step_s: +xStep.value,
+            horizon_s: +xHor.value,
+            min_elevation_deg: +xEl.value,
+            isl_range_km: +xIsl.value,
+            target_availability: +xTarget.value
+        }, sp = +xSpeed.value;
+        if (v.altitude_km < 200 || v.altitude_km > 1200 || v.inclination_deg <= 0 || v.inclination_deg > 180 || v.step_s <= 0 || v.horizon_s % v.step_s || v.horizon_s > 172800 || v.min_elevation_deg < 0 || v.min_elevation_deg >= 90 || v.isl_range_km <= 0 || v.isl_range_km > 10000 || v.target_availability < 0 || v.target_availability > 1 || !Number.isFinite(sp) || sp < REALITY_MIN || sp > REALITY_MAX) {
+            toast('Параметры невалидны');
+            return
+        }
+        Object.assign(e, v);
+        realitySpeed = sp;
+        syncParams();
+        applyScenario(scenario);
+        runCalc()
+    }
+
+    document.getElementById('applyX').onclick = applyX;
+    document.getElementById('resetX').onclick = () => {
+        realitySpeed = 1;
+        applyScenario(demoScenario());
+        syncParams();
+        setTrackList();
+        runCalc()
+    };
+    document.getElementById('dumpX').onclick = dumpAll;
+    document.getElementById('xSpeed').oninput = e => {
+        let v = Math.min(REALITY_MAX, Math.max(REALITY_MIN, +e.target.value || 1));
+        realitySpeed = v;
+        document.getElementById('speedMetric').textContent = '×' + formatSpeed(v)
+    };
+
+    function dumpAll() {
+        let payload = {
+            schema_version: 'cosmo-A-1.0',
+            scenario,
+            results: {stats, snapshots},
+            ui: {reality_speed: realitySpeed, time_format: 'HH:MM:SS.0', integrator_frame_limit: INTEGRATOR_FRAME_LIMIT}
+        };
+        let b = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'}),
+            a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'cosmogrid-full-dump.json';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    }
+
+    function setTrackList() {
+        let el = document.getElementById('satTrack');
+        el.innerHTML = (scenario?.design?.satellites || []).map(x => `<option value="${x.id}">${x.id}</option>`).join('')
+    }
+
+    document.getElementById('untrack').onclick = () => {
+        followId = null;
+        document.getElementById('track').classList.add('hidden')
+    };
+    document.getElementById('satTrack').onchange = () => {
+        followId = document.getElementById('satTrack').value;
+        document.getElementById('track').classList.remove('hidden');
+        renderFrame(+document.getElementById('timeRange').value)
+    };
+
+    function animate() {
+        if (!playing) return;
+        let r = document.getElementById('timeRange'), max = +r.max, cur = +r.value,
+            advance = Math.max(1, Math.round(realitySpeed));
+        let next = cur + Math.min(advance, INTEGRATOR_FRAME_LIMIT);
+        if (next > max) next = 0;
+        r.value = next;
+        renderFrame(next);
+        playTimer = setTimeout(animate, 35)
+    }
+
+    document.getElementById('calcBtn').onclick = () => runCalc();
+    document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
+    document.getElementById('demoBtn').onclick = () => {
+        applyScenario(demoScenario());
+        syncParams();
+        setTrackList();
+        runCalc()
+    };
+    addEventListener('keydown', e => {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            playing = !playing;
+            if (playing) animate()
+        }
+        if (e.key.toLowerCase() === 'c') {
+            coverageOn = !coverageOn;
+            renderFrame(+timeRange.value)
+        }
+        if (e.key.toLowerCase() === 'f') {
+            followId = document.getElementById('satTrack').value;
+            document.getElementById('track').classList.remove('hidden');
+            renderFrame(+timeRange.value)
+        }
+    });
+
+    applyScenario(demoScenario());
+    syncParams();
+    setTrackList();
+    renderFrame(0);
+    runCalc();
 </script>
 </body>
 </html>
