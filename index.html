@@ -489,19 +489,45 @@
             <button id="resetX">Сброс</button>
             <button id="dumpX">Дамп</button>
         </div>
-    </div>
-    <div class="overlay hidden" id="track" style="right:324px;width:260px"><h3>◉ Слежение</h3>
-            <select id="satTrack"></select>
-            <div class="metric"><span>t</span><b id="trT">—</b></div>
-            <div class="metric"><span>XYZ</span><b id="trXYZ">—</b></div>
-            <div class="metric"><span>Соедин.</span><b id="connCount">—</b></div>
-            <div class="metric"><span>Статус</span><b id="satStatus">—</b></div>
-            <div class="metric"><span>Связи</span><div id="connList" class="small" style="max-height:80px;overflow:auto">—</div></div>
+        <div class="card" style="margin-top:10px;padding:9px;background:rgba(255,255,255,.035)">
+            <h3 style="margin-bottom:6px">Орбитальная плоскость</h3>
+            <label class="lbl">Плоскость
+                <select id="planeSel"></select>
+            </label>
+            <div class="paramgrid">
+                <label>RAAN °<input id="planeRaanInput" type="number" min="0" max="359.999" step="0.1"></label>
+                <label>Фаза °<input id="planePhaseInput" type="number" min="0" max="359.999" step="0.1"></label>
+            </div>
             <div class="row" style="margin-top:8px">
-                <button id="toggleSatBtn" class="mini">Выключить</button>
-                <button id="untrack">Сбросить</button>
+                <button id="applyPlane">Изменить плоскость</button>
+                <button id="saveVariant">Сохранить вариант</button>
             </div>
         </div>
+        <div class="row" style="margin-top:8px">
+            <button id="compareVariants">Сравнить варианты</button>
+            <button id="exportResult">Экспорт результата</button>
+        </div>
+    </div>
+    <div class="overlay hidden" id="track" style="right:324px;width:260px"><h3>◉ Слежение</h3>
+        <select id="satTrack"></select>
+        <div class="metric"><span>t</span><b id="trT">—</b></div>
+        <div class="metric"><span>XYZ</span><b id="trXYZ">—</b></div>
+        <div class="metric"><span>Соедин.</span><b id="connCount">—</b></div>
+        <div class="metric"><span>Плоскость</span><b id="planeInfo">—</b></div>
+        <div class="metric"><span>RAAN</span><b id="planeRaan">—</b></div>
+        <div class="metric"><span>Фаза</span><b id="planePhase">—</b></div>
+        <div class="metric"><span>Статус</span><b id="satStatus">—</b></div>
+        <div class="metric"><span>Связи</span><div id="connList" class="small" style="max-height:80px;overflow:auto">—</div></div>
+        <div class="row" style="margin-top:8px">
+            <button id="toggleSatBtn" class="mini">Выключить</button>
+            <button id="untrack">Сбросить</button>
+        </div>
+    </div>
+    <div class="overlay hidden" id="comparePanel" style="right:18px;top:390px;width:430px;max-height:330px;overflow:auto">
+        <h3>Сравнение вариантов</h3>
+        <div id="compareBody" class="small">Сохраните минимум два рассчитанных варианта.</div>
+        <div class="row" style="margin-top:8px"><button id="closeCompare">Закрыть</button></div>
+    </div>
     <canvas id="coverage" class="coverage"></canvas>
     <div class="hud">
         <div class="card">
@@ -583,7 +609,9 @@
     const MU_E = 398600.435507, R_E = 6371, EARTH_T = 86164.09054;
     const timeRangeEl = () => document.getElementById('timeRange');
     let scenario = null, snapshots = [], stats = null, worker = null, camera = {yaw: .35, pitch: .23, dist: 2.0},
-        dragging = false, lastX = 0, lastY = 0;
+        dragging = false, lastX = 0, lastY = 0, selectedPlaneId = null, savedVariants = [];
+
+    try { savedVariants = JSON.parse(localStorage.getItem('cosmogrid_variants') || '[]'); } catch { savedVariants = []; }
 
     function toast(t) {
         const e = $("#toast");
@@ -631,21 +659,99 @@
         };
     }
 
+    function validateScenario(s) {
+        const errors = [];
+        if (!s || s.schema_version !== 'cosmo-A-1.0') errors.push('schema_version должен быть cosmo-A-1.0');
+        const e = s?.environment, d = s?.design;
+        if (!e || !d) return ['отсутствуют environment или design'];
+        for (const k of ['altitude_km','inclination_deg','earth_angle0_deg','horizon_s','step_s','min_elevation_deg','isl_range_km','target_availability']) {
+            if (!Number.isFinite(Number(e[k]))) errors.push(`environment.${k}`);
+        }
+        if (!Number.isInteger(e.horizon_s) || !Number.isInteger(e.step_s) || e.horizon_s <= 0 || e.step_s <= 0 || e.horizon_s % e.step_s !== 0)
+            errors.push('environment.horizon_s / step_s: положительные целые, горизонт кратен шагу');
+        const planes = Array.isArray(d.planes) ? d.planes : [];
+        const sats = Array.isArray(d.satellites) ? d.satellites : [];
+        const pids = new Set();
+        for (const p of planes) {
+            if (!p?.id || pids.has(p.id)) errors.push(`design.planes[].id: ${p?.id || 'пусто'} не уникален`);
+            pids.add(p?.id);
+            if (!Number.isFinite(Number(p.raan_deg)) || !Number.isFinite(Number(p.phase_deg))) errors.push(`плоскость ${p.id || '?'}: RAAN/phase`);
+        }
+        const sids = new Set();
+        for (const sat of sats) {
+            if (!sat?.id || sids.has(sat.id)) errors.push(`design.satellites[].id: ${sat?.id || 'пусто'} не уникален`);
+            sids.add(sat?.id);
+            if (!pids.has(sat?.plane_id)) errors.push(`спутник ${sat.id || '?'}: неизвестная plane_id`);
+            if (!Number.isFinite(Number(sat.slot_deg))) errors.push(`спутник ${sat.id || '?'}: slot_deg`);
+        }
+        const sites = Array.isArray(s.ground_sites) ? s.ground_sites : [];
+        const siteIds = new Set();
+        for (const x of sites) {
+            if (!x?.id || siteIds.has(x.id)) errors.push(`ground_sites[].id: ${x?.id || 'пусто'} не уникален`);
+            siteIds.add(x?.id);
+            if (!['client','gateway'].includes(x?.role)) errors.push(`ground_sites ${x.id || '?'}: role`);
+            if (![x.lat_deg, x.lon_deg].every(v => Number.isFinite(Number(v)))) errors.push(`ground_sites ${x.id || '?'}: координаты`);
+        }
+        if (!sites.some(x => x.role === 'gateway')) errors.push('ground_sites: нет gateway');
+        if (!sites.some(x => x.role === 'client')) errors.push('ground_sites: нет client');
+        return errors;
+    }
+
+    function syncPlaneUI() {
+        const planes = scenario?.design?.planes || [];
+        const sel = document.getElementById('planeSel');
+        if (!sel) return;
+        sel.innerHTML = planes.map(p => `<option value="${p.id}">${p.id}</option>`).join('');
+        if (!planes.length) return;
+        if (!selectedPlaneId || !planes.some(p => p.id === selectedPlaneId)) selectedPlaneId = planes[0].id;
+        sel.value = selectedPlaneId;
+        const p = planes.find(x => x.id === selectedPlaneId);
+        if (p) {
+            document.getElementById('planeRaanInput').value = Number(p.raan_deg).toFixed(3);
+            document.getElementById('planePhaseInput').value = Number(p.phase_deg).toFixed(3);
+        }
+    }
+
+    function applyPlaneChange() {
+        if (!scenario) return;
+        const p = (scenario.design.planes || []).find(x => x.id === selectedPlaneId);
+        if (!p) return;
+        const raan = Number(document.getElementById('planeRaanInput').value);
+        const phase = Number(document.getElementById('planePhaseInput').value);
+        if (![raan, phase].every(Number.isFinite) || raan < 0 || raan >= 360 || phase < 0 || phase >= 360) {
+            toast('RAAN/фаза должны быть 0…360°'); return;
+        }
+        p.raan_deg = raan;
+        p.phase_deg = phase;
+        log(`Изменена плоскость ${p.id}: RAAN=${raan.toFixed(2)}°, phase=${phase.toFixed(2)}°`);
+        runCalc();
+    }
+
+    function getPlaneForSatellite(satId) {
+        const sat = scenario?.design?.satellites?.find(s => s.id === satId);
+        return sat ? (scenario.design.planes || []).find(p => p.id === sat.plane_id) : null;
+    }
+
     function applyScenario(s) {
-        scenario = s;
-        const e = s.environment, d = s.design;
+        const errors = validateScenario(s);
+        if (errors.length) throw new Error('Некорректный сценарий:\n' + errors.slice(0, 8).join('\n'));
+        scenario = structuredClone(s);
+        const e = scenario.environment, d = scenario.design;
         $("#alt").textContent = e.altitude_km + " км";
         $("#inc").textContent = e.inclination_deg + "°";
         $("#isl").textContent = e.isl_range_km + " км";
         $("#step").textContent = e.step_s + " с";
         $("#stage").value = d.launch_stage || 3;
         $("#stageVal").textContent = $("#stage").value + " / 3";
-        const cs = (s.ground_sites || []).filter(x => x.role === "client");
+        const cs = (scenario.ground_sites || []).filter(x => x.role === "client");
         $("#clientSel").innerHTML = cs.map(x => `<option value="${x.id}">${x.name || x.id}</option>`).join("");
+        syncPlaneUI();
         $("#timeRange").max = Math.max(0, Math.floor(e.horizon_s / e.step_s) - 1);
         $("#calcInfo").textContent = `${d.satellites.length} sats · ${$("#timeRange").max * 1 + 1} отсчётов`;
         log(`Сценарий ${s.meta?.title || s.meta?.id || "loaded"} · ${d.satellites.length} аппаратов`);
     }
+
+    $("#clientSel").onchange = () => updateDashboardStats($("#clientSel").value);
 
     $("#stage").oninput = () => {
         $("#stageVal").textContent = $("#stage").value + " / 3";
@@ -659,7 +765,9 @@
         try {
             const s = JSON.parse(await f.text());
             applyScenario(s);
-            toast("JSON загружен");
+            syncParams();
+            setTrackList();
+            toast("JSON загружен и проверен");
         } catch (err) {
             toast("Ошибка JSON");
             log(err.message)
@@ -680,6 +788,15 @@
     };
     $("#timeRange").oninput = () => { floatFrame = +$("#timeRange").value; renderFrame(floatFrame); };
 
+    function updateDashboardStats(clientId) {
+        const st = stats?.perClient?.[clientId] || stats;
+        if (!st) return;
+        document.getElementById('avail').textContent = (Number(st.availability || 0) * 100).toFixed(1) + '%';
+        document.getElementById('vis').textContent = (Number(st.visibility || 0) * 100).toFixed(1) + '%';
+        document.getElementById('gap').textContent = fmtTime(st.maxGap || 0);
+        document.getElementById('hops').textContent = st.hops ?? '—';
+    }
+
     async function runCalc() {
         if (!scenario) applyScenario(demoScenario());
         $("#status").textContent = "расчёт…";
@@ -697,10 +814,7 @@
                 stats = m.stats;
                 $("#status").textContent = "готов";
                 $("#sdot").style.color = "#7ff0ae";
-                $("#avail").textContent = (stats.availability * 100).toFixed(1) + "%";
-                $("#vis").textContent = (stats.visibility * 100).toFixed(1) + "%";
-                $("#gap").textContent = fmtTime(stats.maxGap);
-                $("#hops").textContent = stats.hops ?? "—";
+                updateDashboardStats($("#clientSel").value);
                 $("#pbar").style.width = "100%";
                 $("#calcInfo").textContent = `${scenario.design.satellites.length} sats · ${snapshots.length} отсчётов`;
                 renderFrame(+$("#timeRange").value);
@@ -754,18 +868,30 @@ self.onmessage=({data})=>{
  try{
   const s=data.scenario,e=s.environment,d=s.design,range=e.isl_range_km,minEl=e.min_elevation_deg,stage=d.launch_stage||3;
   const cs=(s.ground_sites||[]).filter(x=>x.role==="client"),gw=(s.ground_sites||[]).find(x=>x.role==="gateway");
-  const count=Math.floor(e.horizon_s/e.step_s);const snaps=[];let pathOK=0,visOK=0,maxGap=0,curGap=0,lastHops=null;
+  const count=Math.floor(e.horizon_s/e.step_s);const snaps=[];
+  const pc={}; for(const c of cs) pc[c.id]={pathOK:0,visOK:0,maxGap:0,curGap:0,lastHops:null};
+  const isGatewayDown=(t)=>gw && (s.gateway_outages||[]).some(f=>f.gateway_id===gw.id&&t>=f.start_s&&t<f.end_s);
   for(let ti=0;ti<count;ti++){
    const t=ti*e.step_s, sats=[];
-   for(const sat of d.satellites){let active=sat.launch_batch<=stage;for(const f of (s.failures||[]))if(f.satellite_id===sat.id&&t>=f.start_s&&t<f.end_s)active=false;const p=d.planes?d.planes.find(x=>x.id===sat.plane_id):d.planes.find(x=>x.id===sat.plane_id);let pos=earthSatelliteState(sat,p||{raan_deg:0,phase_deg:0},t,e);sats.push({id:sat.id,p:pos,active})}
-   const active=sats.filter(x=>x.active);const routes={};let ok=false,vis=false;
-   for(const c of cs){let cp=ground(c);if(active.some(x=>elev(x.p,cp)>=minEl))vis=true;let path=route(c.id,gw?.id,active,s.ground_sites,range,minEl);routes[c.id]=path;if(path.length&&c.id===(data.clientId||cs[0]?.id)){ok=true;lastHops=path.length-1}}
-   if(ok){pathOK++;curGap=0}else{curGap++;maxGap=Math.max(maxGap,curGap*e.step_s)}
-   if(vis)visOK++;
-   snaps.push({t,sats,routes});
+   for(const sat of d.satellites){let active=sat.launch_batch<=stage;for(const f of (s.failures||[]))if(f.satellite_id===sat.id&&t>=f.start_s&&t<f.end_s)active=false;const p=d.planes.find(x=>x.id===sat.plane_id);let pos=earthSatelliteState(sat,p||{raan_deg:0,phase_deg:0},t,e);sats.push({id:sat.id,p:pos,active,plane_id:sat.plane_id,slot_deg:sat.slot_deg,raan_deg:p?.raan_deg??0,phase_deg:p?.phase_deg??0})}
+   const active=sats.filter(x=>x.active);const routes={};const routeReasons={};
+   for(const c of cs){
+     const st=pc[c.id];
+     const cp=ground(c);
+     const vis=active.some(x=>elev(x.p,cp)>=minEl);
+     const path=isGatewayDown(t)?[]:route(c.id,gw?.id,active,s.ground_sites,range,minEl);
+     routes[c.id]=path;
+     routeReasons[c.id]=isGatewayDown(t)?'gateway_down':(path.length?'ok':'no_route');
+     if(path.length){st.pathOK++;st.curGap=0;st.lastHops=path.length-1;}else{st.curGap++;st.maxGap=Math.max(st.maxGap,st.curGap*e.step_s);}
+     if(vis)st.visOK++;
+   }
+   snaps.push({t,sats,routes,routeReasons,ground:{gateway_down:isGatewayDown(t)}});
    if(ti%Math.max(1,Math.floor(count/20))===0)postMessage({type:"progress",p:ti/count})
   }
-  postMessage({type:"done",snapshots:snaps,stats:{availability:pathOK/count,visibility:visOK/count,maxGap,hops:lastHops}});
+  const perClient={};
+  for(const c of cs){const st=pc[c.id];perClient[c.id]={availability:st.pathOK/count,visibility:st.visOK/count,maxGap:st.maxGap,hops:st.lastHops};}
+  const selected=perClient[data.clientId]||perClient[cs[0]?.id]||{availability:0,visibility:0,maxGap:0,hops:null};
+  postMessage({type:"done",snapshots:snaps,stats:{...selected,perClient}});
  }catch(err){postMessage({type:"error",msg:err.stack||String(err)})}
 }`;
 
@@ -835,14 +961,25 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
 
     function vecSub(a, b) { return [a[0]-b[0], a[1]-b[1], a[2]-b[2]] }
     function vecMag(v) { return Math.hypot(v[0], v[1], v[2]) }
+    function segmentHitsEarth(a, b) {
+        const d = vecSub(b, a);
+        const dd = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+        if (dd <= 1e-9) return vecMag(a) <= R_E + 1e-3;
+        const q = Math.max(0, Math.min(1, -(a[0]*d[0] + a[1]*d[1] + a[2]*d[2]) / dd));
+        const qx = a[0] + q * d[0], qy = a[1] + q * d[1], qz = a[2] + q * d[2];
+        return Math.hypot(qx, qy, qz) <= R_E + 1e-3;
+    }
+
     function visibleMain(a, b, range) {
         const d = vecSub(b, a);
         const dist = vecMag(d);
         if (dist >= range) return false;
-        const dd = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
-        const q = Math.max(0, Math.min(1, -(a[0]*d[0] + a[1]*d[1] + a[2]*d[2]) / dd));
-        const qx = a[0] + q * d[0], qy = a[1] + q * d[1], qz = a[2] + q * d[2];
-        return Math.hypot(qx, qy, qz) > R_E;
+        return !segmentHitsEarth(a, b);
+    }
+
+    function groundSitePos(site) {
+        const p = site.lat_deg * DEG, l = site.lon_deg * DEG;
+        return [R_E * Math.cos(p) * Math.cos(l), R_E * Math.cos(p) * Math.sin(l), R_E * Math.sin(p)];
     }
 
     function look(eye, tar, up = [0, 1, 0]) {
@@ -863,7 +1000,13 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
         return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
     }
 
-    // Основной рендер: строим вершины для Земли, спутников и линий маршрута и отрисовываем их одним drawArrays.
+    function siteMap(snap) {
+        const out = new Map();
+        for (const site of (scenario?.ground_sites || [])) out.set(site.id, {p: groundSitePos(site), role: site.role, name: site.name || site.id});
+        return out;
+    }
+
+    // Основной рендер: строим вершины для Земли, спутников, наземных пунктов и линий маршрута.
     function renderFrame(i) {
         if (!gl || !scenario) return;
         if (!snapshots || !snapshots.length) return;
@@ -927,12 +1070,28 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
             }
         }
 
-        // Route lines (client->gateway paths) — draw as GREEN lines to emphasize connectivity
-        for (const [cid, path] of Object.entries(snap.routes || {})) for (let k = 1; k < path.length - 1; k++) {
-            let a = snap.sats.find(x => x.id === path[k]), b = snap.sats.find(x => x.id === path[k + 1]);
-            if (a && b) {
-                vertsLines.push(...a.p.map(v => v * scale), ...b.p.map(v => v * scale));
-                colsLines.push(0, 0.9, 0, 0, 0.9, 0);
+        // Наземные клиенты и шлюзы — отдельные точки на поверхности Земли.
+        const sitePos = siteMap(snap);
+        for (const [id, q] of sitePos) {
+            const p = q.p.map(v => v * scale);
+            vertsPoints.push(...p);
+            if (q.role === 'gateway') { colsPoints.push(1.0, .72, .16); sizesPoints.push(24); }
+            else { colsPoints.push(.45, 1.0, .55); sizesPoints.push(20); }
+        }
+
+        // Route lines: client -> satellite -> ... -> satellite -> gateway.
+        // Отдельно рисуем наземные участки, а не только ISL.
+        for (const [cid, path] of Object.entries(snap.routes || {})) {
+            if (!path || !path.length) continue;
+            const nodes = [cid, ...path.slice(1, -1), path[path.length - 1]];
+            for (let k = 0; k < nodes.length - 1; k++) {
+                const aId = nodes[k], bId = nodes[k + 1];
+                const aSat = snap.sats.find(x => x.id === aId), bSat = snap.sats.find(x => x.id === bId);
+                const a = aSat ? aSat.p : sitePos.get(aId)?.p;
+                const b = bSat ? bSat.p : sitePos.get(bId)?.p;
+                if (!a || !b) continue;
+                vertsLines.push(...a.map(v => v * scale), ...b.map(v => v * scale));
+                colsLines.push(0, 1, 0, 0, 1, 0);
             }
         }
 
@@ -1129,6 +1288,7 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
     applyScenario(demoScenario());
     syncParams();
     setTrackList();
+    syncPlaneUI();
     renderFrame(0);
 
     function rc() {
@@ -1206,11 +1366,75 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
         document.getElementById('speedMetric').textContent = '×' + formatSpeed(v)
     };
 
+    function saveVariant() {
+        if (!scenario || !stats) { toast('Сначала выполните расчёт'); return; }
+        const title = scenario.meta?.title || scenario.meta?.id || `variant-${savedVariants.length + 1}`;
+        savedVariants.push({
+            title: `${title} #${savedVariants.length + 1}`,
+            saved_at: new Date().toISOString(),
+            scenario: structuredClone(scenario),
+            stats: structuredClone(stats)
+        });
+        savedVariants = savedVariants.slice(-10);
+        localStorage.setItem('cosmogrid_variants', JSON.stringify(savedVariants));
+        toast(`Вариант сохранён (${savedVariants.length})`);
+    }
+
+    function compareVariantsNow() {
+        const panel = document.getElementById('comparePanel');
+        const body = document.getElementById('compareBody');
+        if (!savedVariants.length) { body.innerHTML = 'Нет сохранённых вариантов.'; panel.classList.remove('hidden'); return; }
+        const current = stats ? {title:'Текущий', stats} : null;
+        const rows = savedVariants.map(v => ({title:v.title, stats:v.stats}));
+        if (current) rows.push(current);
+        body.innerHTML = rows.map((v,i) => {
+            const st=v.stats||{};
+            return `<div style="border-bottom:1px solid rgba(255,255,255,.1);padding:7px 0"><b>${i+1}. ${v.title}</b><br>`+
+                `доступность: ${(Number(st.availability||0)*100).toFixed(2)}% · `+
+                `видимость: ${(Number(st.visibility||0)*100).toFixed(2)}% · `+
+                `макс. перерыв: ${fmtTime(st.maxGap||0)} · `+
+                `переходы: ${st.hops ?? '—'}</div>`;
+        }).join('');
+        panel.classList.remove('hidden');
+    }
+
+    function buildResultExport() {
+        const routes = [];
+        for (const snap of snapshots || []) {
+            for (const c of (scenario?.ground_sites || []).filter(x => x.role === 'client')) {
+                routes.push({t_s:snap.t, client_id:c.id, path:Array.isArray(snap.routes?.[c.id]) ? snap.routes[c.id] : []});
+            }
+        }
+        return {
+            schema_version: 'cosmo-A-result-1.0',
+            effective_scenario: structuredClone(scenario),
+            routes,
+            summary: structuredClone(stats || {})
+        };
+    }
+
+    function exportResult() {
+        if (!scenario || !snapshots.length) { toast('Сначала выполните расчёт'); return; }
+        const payload = buildResultExport();
+        const b = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+        const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download='cosmogrid-result.json'; a.click();
+        setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+        toast('Результат экспортирован');
+    }
+
+    document.getElementById('planeSel').onchange = e => { selectedPlaneId = e.target.value; syncPlaneUI(); };
+    document.getElementById('applyPlane').onclick = applyPlaneChange;
+    document.getElementById('saveVariant').onclick = saveVariant;
+    document.getElementById('compareVariants').onclick = compareVariantsNow;
+    document.getElementById('closeCompare').onclick = () => document.getElementById('comparePanel').classList.add('hidden');
+    document.getElementById('exportResult').onclick = exportResult;
+
     function dumpAll() {
         let payload = {
-            schema_version: 'cosmo-A-1.0',
-            scenario,
-            results: {stats, snapshots},
+            schema_version: 'cosmo-A-result-1.0',
+            effective_scenario: structuredClone(scenario),
+            result: buildResultExport(),
+            snapshots,
             ui: {reality_speed: realitySpeed, time_format: 'HH:MM:SS.0', integrator_frame_limit: INTEGRATOR_FRAME_LIMIT}
         };
         let b = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'}),
@@ -1294,6 +1518,9 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
             document.getElementById('trT').textContent = '—';
             document.getElementById('trXYZ').textContent = '—';
             document.getElementById('connCount').textContent = '—';
+            document.getElementById('planeInfo').textContent = '—';
+            document.getElementById('planeRaan').textContent = '—';
+            document.getElementById('planePhase').textContent = '—';
             document.getElementById('satStatus').textContent = '—';
             return;
         }
@@ -1315,6 +1542,10 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
                     if (visibleMain(fs.p, o.p, range)) list.push(o.id);
                 }
                 document.getElementById('connList').textContent = list.length ? list.join(', ') : '—';
+                const plane = getPlaneForSatellite(sid);
+                document.getElementById('planeInfo').textContent = plane ? plane.id : '—';
+                document.getElementById('planeRaan').textContent = plane ? `${Number(plane.raan_deg).toFixed(2)}°` : '—';
+                document.getElementById('planePhase').textContent = plane ? `${Number(plane.phase_deg).toFixed(2)}°` : '—';
                 // status: if scenario.failures contains it -> OFF, else use fs.active
                 const forced = (scenario.failures || []).some(f => f.satellite_id === sid);
                 document.getElementById('satStatus').textContent = forced ? 'OFF (forced)' : (fs.active ? 'ON' : 'OFF');
