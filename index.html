@@ -820,8 +820,12 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
         const verts = [], cols = [], scale = 1 / (R_E + scenario.environment.altitude_km);
         // Earth
         for (let k = 0; k < 1024; k++) {
-            let z = 1 - 2 * (k + .5) / 1024, a = Math.sqrt(Math.max(0, 1 - z * z)) * 6.28318 * k * .618,
-                x = Math.cos(a) * a * 0.985, y = z * 0.985, zz = Math.sin(a) * a * .985;
+            const z = 1 - 2 * (k + .5) / 1024;
+            const radius = Math.sqrt(Math.max(0, 1 - z * z));
+            const angle = TAU * (k / 1024) * 0.618;
+            const x = Math.cos(angle) * radius * 0.985;
+            const y = z * 0.985;
+            const zz = Math.sin(angle) * radius * .985;
             verts.push(x, y, zz);
             cols.push(.08, .13, .2)
         }
