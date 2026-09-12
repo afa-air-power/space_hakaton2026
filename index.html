@@ -570,7 +570,7 @@
     const TAU = Math.PI * 2, DEG = Math.PI / 180;
     const MU_E = 398600.435507, R_E = 6371, EARTH_T = 86164.09054;
     const timeRangeEl = () => document.getElementById('timeRange');
-    let scenario = null, snapshots = [], stats = null, worker = null, camera = {yaw: .35, pitch: .23, dist: 3.4},
+    let scenario = null, snapshots = [], stats = null, worker = null, camera = {yaw: .35, pitch: .23, dist: 2.0},
         dragging = false, lastX = 0, lastY = 0;
 
     function toast(t) {
@@ -659,11 +659,11 @@
     };
     $("#calcBtn").onclick = () => runCalc();
     $("#earthBtn").onclick = () => {
-        camera = {yaw: .35, pitch: .23, dist: 3.4};
+        camera = {yaw: .35, pitch: .23, dist: 2.0};
         renderFrame(+$("#timeRange").value)
     };
     $("#freeBtn").onclick = () => {
-        camera = {yaw: 0.9, pitch: .65, dist: 6.5};
+        camera = {yaw: 0.9, pitch: .65, dist: 4.0};
         renderFrame(+$("#timeRange").value)
     };
     $("#timeRange").oninput = () => renderFrame(+$("#timeRange").value);
@@ -741,7 +741,7 @@ self.onmessage=({data})=>{
   const count=Math.floor(e.horizon_s/e.step_s);const snaps=[];let pathOK=0,visOK=0,maxGap=0,curGap=0,lastHops=null;
   for(let ti=0;ti<count;ti++){
    const t=ti*e.step_s, sats=[];
-   for(const sat of d.satellites){let active=sat.launch_batch<=stage;for(const f of (s.failures||[]))if(f.satellite_id===sat.id&&t>=f.start_s&&t<f.end_s)active=false;const p=d.planеs?d.planеs.find(x=>x.id===sat.plane_id):d.planes.find(x=>x.id===sat.plane_id);let pos=earthSatelliteState(sat,p||{raan_deg:0,phase_deg:0},t,e);sats.push({id:sat.id,p:pos,active})}
+   for(const sat of d.satellites){let active=sat.launch_batch<=stage;for(const f of (s.failures||[]))if(f.satellite_id===sat.id&&t>=f.start_s&&t<f.end_s)active=false;const p=d.planes?d.planes.find(x=>x.id===sat.plane_id):d.planes.find(x=>x.id===sat.plane_id);let pos=earthSatelliteState(sat,p||{raan_deg:0,phase_deg:0},t,e);sats.push({id:sat.id,p:pos,active})}
    const active=sats.filter(x=>x.active);const routes={};let ok=false,vis=false;
    for(const c of cs){let cp=ground(c);if(active.some(x=>elev(x.p,cp)>=minEl))vis=true;let path=route(c.id,gw?.id,active,s.ground_sites,range,minEl);routes[c.id]=path;if(path.length&&c.id===(data.clientId||cs[0]?.id)){ok=true;lastHops=path.length-1}}
    if(ok){pathOK++;curGap=0}else{curGap++;maxGap=Math.max(maxGap,curGap*e.step_s)}
@@ -763,7 +763,7 @@ self.onmessage=({data})=>{
         toast("WebGL2 недоступен");
     }
     const vs = `#version 300 es
-in vec3 aPos;in vec3 aColor;uniform mat4 uMVP;out vec3 vColor;void main(){gl_Position=uMVP*vec4(aPos,1.0);gl_PointSize=5.5;vColor=aColor;}`;
+in vec3 aPos;in vec3 aColor;uniform mat4 uMVP;out vec3 vColor;void main(){gl_Position=uMVP*vec4(aPos,1.0);gl_PointSize=16.0;vColor=aColor;}`;
     const fs = `#version 300 es
 precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=length(gl_PointCoord-vec2(.5));if(d>.5)discard;outColor=vec4(vColor,1.0);}`;
 
@@ -839,7 +839,7 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
             const y = z * 0.985;
             const zz = Math.sin(angle) * radius * .985;
             verts.push(x, y, zz);
-            cols.push(.08, .13, .2)
+            cols.push(.28, .35, .45)
         }
         const satBase = verts.length / 3;
         for (const s of snap.sats) {
@@ -945,16 +945,16 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
         if (e.target === $("#drop")) $("#drop").style.display = "none"
     });
 
-    applyScenario(demoScenario());
-    syncParams();
-    setTrackList();
-    renderFrame(0);
-
     // --- v3 controls / animation / full dump ---
     let playing = false, playTimer = null, coverageOn = true, followId = null;
     const cov = document.getElementById('coverage'), cc = cov.getContext('2d');
     const REALITY_MIN = 0.1, REALITY_MAX = 100000, INTEGRATOR_FRAME_LIMIT = 1200;
     let realitySpeed = 1;
+
+    applyScenario(demoScenario());
+    syncParams();
+    setTrackList();
+    renderFrame(0);
 
     function rc() {
         cov.width = innerWidth * devicePixelRatio;
