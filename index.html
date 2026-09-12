@@ -374,6 +374,8 @@
             gap: 8px;
             align-items: center
         }
+        select, option { background: rgba(11, 16, 25, .95); color: var(--text); }
+        select { appearance: none; -webkit-appearance: none; -moz-appearance: none; }
 
         input[type=range] {
             padding: 0;
@@ -460,6 +462,10 @@
         <button id="demoBtn">Demo 48</button>
         <button id="calcBtn">▶ Расчёт</button>
         <div class="spacer"></div>
+        <button id="playPauseBtn">Play</button>
+        <button id="stopBtn">Stop</button>
+        <button id="fasterBtn">Faster</button>
+        <button id="slowerBtn">Slower</button>
         <span class="badge" id="engine">WebGL2</span>
     </div>
 
@@ -484,12 +490,18 @@
             <button id="dumpX">Дамп</button>
         </div>
     </div>
-    <div class="overlay hidden" id="track" style="right:324px;width:240px"><h3>◉ Слежение</h3><select
-            id="satTrack"></select>
-        <div class="metric"><span>t</span><b id="trT">—</b></div>
-        <div class="metric"><span>XYZ</span><b id="trXYZ">—</b></div>
-        <button id="untrack" style="margin-top:8px">Сбросить</button>
-    </div>
+    <div class="overlay hidden" id="track" style="right:324px;width:260px"><h3>◉ Слежение</h3>
+            <select id="satTrack"></select>
+            <div class="metric"><span>t</span><b id="trT">—</b></div>
+            <div class="metric"><span>XYZ</span><b id="trXYZ">—</b></div>
+            <div class="metric"><span>Соедин.</span><b id="connCount">—</b></div>
+            <div class="metric"><span>Статус</span><b id="satStatus">—</b></div>
+            <div class="metric"><span>Связи</span><div id="connList" class="small" style="max-height:80px;overflow:auto">—</div></div>
+            <div class="row" style="margin-top:8px">
+                <button id="toggleSatBtn" class="mini">Выключить</button>
+                <button id="untrack">Сбросить</button>
+            </div>
+        </div>
     <canvas id="coverage" class="coverage"></canvas>
     <div class="hud">
         <div class="card">
@@ -666,7 +678,7 @@
         camera = {yaw: 0.9, pitch: .65, dist: 4.0};
         renderFrame(+$("#timeRange").value)
     };
-    $("#timeRange").oninput = () => renderFrame(+$("#timeRange").value);
+    $("#timeRange").oninput = () => { floatFrame = +$("#timeRange").value; renderFrame(floatFrame); };
 
     async function runCalc() {
         if (!scenario) applyScenario(demoScenario());
@@ -695,6 +707,10 @@
                 log(`Модель жюри готова · доступность ${(stats.availability * 100).toFixed(2)}%`);
                 toast("Расчёт завершён");
                 playing = true;
+                try { document.getElementById('playPauseBtn').textContent = 'Pause'; } catch(e) {}
+                // start smooth playback
+                lastAnimateTs = performance.now();
+                floatFrame = +document.getElementById('timeRange').value;
                 animate();
             }
             if (m.type === "error") {
@@ -763,7 +779,7 @@ self.onmessage=({data})=>{
         toast("WebGL2 недоступен");
     }
     const vs = `#version 300 es
-in vec3 aPos;in vec3 aColor;uniform mat4 uMVP;out vec3 vColor;void main(){gl_Position=uMVP*vec4(aPos,1.0);gl_PointSize=16.0;vColor=aColor;}`;
+in vec3 aPos;in vec3 aColor;in float aSize;uniform mat4 uMVP;out vec3 vColor;void main(){gl_Position=uMVP*vec4(aPos,1.0);gl_PointSize=aSize;vColor=aColor;}`;
     const fs = `#version 300 es
 precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=length(gl_PointCoord-vec2(.5));if(d>.5)discard;outColor=vec4(vColor,1.0);}`;
 
@@ -783,6 +799,7 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
     }
     const posBuf = gl ? gl.createBuffer() : null;
     const colBuf = gl ? gl.createBuffer() : null;
+    const sizeBuf = gl ? gl.createBuffer() : null;
 
     function resize() {
         const d = window.devicePixelRatio || 1;
@@ -803,6 +820,29 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
         let o = new Array(16).fill(0);
         for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) for (let k = 0; k < 4; k++) o[c + r * 4] += a[k + r * 4] * b[c + k * 4];
         return o
+    }
+
+    // transform 4-vector by 4x4 matrix (column-major layout used by WebGL)
+    function transformPoint(m, v) {
+        const x = v[0], y = v[1], z = v[2], w = v[3] || 1;
+        return [
+            m[0] * x + m[4] * y + m[8] * z + m[12] * w,
+            m[1] * x + m[5] * y + m[9] * z + m[13] * w,
+            m[2] * x + m[6] * y + m[10] * z + m[14] * w,
+            m[3] * x + m[7] * y + m[11] * z + m[15] * w
+        ];
+    }
+
+    function vecSub(a, b) { return [a[0]-b[0], a[1]-b[1], a[2]-b[2]] }
+    function vecMag(v) { return Math.hypot(v[0], v[1], v[2]) }
+    function visibleMain(a, b, range) {
+        const d = vecSub(b, a);
+        const dist = vecMag(d);
+        if (dist >= range) return false;
+        const dd = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
+        const q = Math.max(0, Math.min(1, -(a[0]*d[0] + a[1]*d[1] + a[2]*d[2]) / dd));
+        const qx = a[0] + q * d[0], qy = a[1] + q * d[1], qz = a[2] + q * d[2];
+        return Math.hypot(qx, qy, qz) > R_E;
     }
 
     function look(eye, tar, up = [0, 1, 0]) {
@@ -826,64 +866,152 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
     // Основной рендер: строим вершины для Земли, спутников и линий маршрута и отрисовываем их одним drawArrays.
     function renderFrame(i) {
         if (!gl || !scenario) return;
-        const snap = snapshots[i];
-        if (!snap) return;
-        $("#clock").textContent = "t = " + fmtTime(snap.t);
-        const verts = [], cols = [], scale = 1 / (R_E + scenario.environment.altitude_km);
-        // Земля: рендерится как набор точек на сфере. Важно, чтобы угол и радиус считались отдельно.
-        for (let k = 0; k < 1024; k++) {
-            const z = 1 - 2 * (k + .5) / 1024;
+        if (!snapshots || !snapshots.length) return;
+        // support fractional i for smooth interpolation between snapshots
+        const idx0 = Math.floor(i);
+        const idx1 = Math.min(idx0 + 1, snapshots.length - 1);
+        const frac = Math.max(0, Math.min(1, (isFinite(i) ? (i - idx0) : 0)));
+        const snap0 = snapshots[idx0];
+        const snap1 = snapshots[idx1];
+        if (!snap0) return;
+        const interpT = snap0.t * (1 - frac) + (snap1 ? snap1.t * frac : 0);
+        $("#clock").textContent = "t = " + fmtTime(interpT);
+        const scale = 1 / (R_E + scenario.environment.altitude_km);
+
+        // build interpolated snapshot object with sats positions
+        const snap = { t: interpT, sats: [], routes: snap0.routes };
+        const by1 = new Map((snap1?.sats || []).map(s => [s.id, s]));
+        for (const s0 of snap0.sats) {
+            const s1 = by1.get(s0.id);
+            if (s1) {
+                const p = [
+                    s0.p[0] * (1 - frac) + s1.p[0] * frac,
+                    s0.p[1] * (1 - frac) + s1.p[1] * frac,
+                    s0.p[2] * (1 - frac) + s1.p[2] * frac
+                ];
+                const active = frac < 0.5 ? s0.active : s1.active;
+                snap.sats.push({ id: s0.id, p, active });
+            } else {
+                snap.sats.push({ id: s0.id, p: s0.p.slice(), active: s0.active });
+            }
+        }
+
+        // Separate buffers for points (earth + sats) and lines (routes + ISL)
+        const vertsPoints = [], colsPoints = [], sizesPoints = [];
+        const vertsLines = [], colsLines = [];
+
+        // Earth points (denser for smooth sphere)
+        for (let k = 0; k < 4096; k++) {
+            const z = 1 - 2 * (k + .5) / 4096;
             const radius = Math.sqrt(Math.max(0, 1 - z * z));
-            const angle = TAU * (k / 1024) * 0.618;
+            const angle = TAU * (k / 4096) * 0.618;
             const x = Math.cos(angle) * radius * 0.985;
             const y = z * 0.985;
             const zz = Math.sin(angle) * radius * .985;
-            verts.push(x, y, zz);
-            cols.push(.28, .35, .45)
+            vertsPoints.push(x, y, zz);
+            colsPoints.push(.06, .12, .06);
+            sizesPoints.push(6.0);
         }
-        const satBase = verts.length / 3;
+
+        // Satellites as points (and compute highlight size/color for followed sat)
         for (const s of snap.sats) {
             let p = s.p.map(v => v * scale);
-            verts.push(...p);
-            cols.push(...(s.active ? [.52, .83, 1] : [1, .3, .5]))
+            vertsPoints.push(...p);
+            const isFollow = (followId && s.id === followId);
+            if (isFollow) {
+                colsPoints.push(1.0, 0.9, 0.2); // highlight (yellowish)
+                sizesPoints.push(28.0);
+            } else {
+                colsPoints.push(...(s.active ? [.52, .83, 1] : [1, .3, .5]));
+                sizesPoints.push(s.active ? 14.0 : 10.0);
+            }
         }
-        // Линии маршрутов строятся по текущему состоянию сети. Визуально это показывает доступный путь.
+
+        // Route lines (client->gateway paths) — draw as GREEN lines to emphasize connectivity
         for (const [cid, path] of Object.entries(snap.routes || {})) for (let k = 1; k < path.length - 1; k++) {
             let a = snap.sats.find(x => x.id === path[k]), b = snap.sats.find(x => x.id === path[k + 1]);
             if (a && b) {
-                verts.push(...a.p.map(v => v * scale), ...b.p.map(v => v * scale));
-                cols.push(.5, 1, .7, .5, 1, .7)
+                vertsLines.push(...a.p.map(v => v * scale), ...b.p.map(v => v * scale));
+                colsLines.push(0, 0.9, 0, 0, 0.9, 0);
             }
         }
+
+        // ISL visibility lines between satellites (green)
+        const range = scenario.environment.isl_range_km;
+        for (let ii = 0; ii < snap.sats.length; ii++) {
+            for (let j = ii + 1; j < snap.sats.length; j++) {
+                const a = snap.sats[ii], b = snap.sats[j];
+                if (!a.active || !b.active) continue;
+                if (visibleMain(a.p, b.p, range)) {
+                    vertsLines.push(...a.p.map(v => v * scale), ...b.p.map(v => v * scale));
+                    colsLines.push(0, 0.9, 0, 0, 0.9, 0);
+                }
+            }
+        }
+
+        // Clear and draw
         gl.clearColor(.015, .02, .03, 1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.enable(gl.DEPTH_TEST);
         gl.useProgram(prog);
-        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.DYNAMIC_DRAW);
-        gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cols), gl.DYNAMIC_DRAW);
+
         const locP = gl.getAttribLocation(prog, "aPos"), locC = gl.getAttribLocation(prog, "aColor");
+
+        // Draw points
+        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertsPoints), gl.DYNAMIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colsPoints), gl.DYNAMIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sizesPoints), gl.DYNAMIC_DRAW);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
         gl.enableVertexAttribArray(locP);
         gl.vertexAttribPointer(locP, 3, gl.FLOAT, false, 0, 0);
         gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
         gl.enableVertexAttribArray(locC);
         gl.vertexAttribPointer(locC, 3, gl.FLOAT, false, 0, 0);
+        // size attribute
+        const locS = gl.getAttribLocation(prog, 'aSize');
+        if (locS >= 0) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf);
+            gl.enableVertexAttribArray(locS);
+            gl.vertexAttribPointer(locS, 1, gl.FLOAT, false, 0, 0);
+        }
+
         let target = [0, 0, 0];
         if (followId && snap) {
             let fs = snap.sats.find(x => x.id === followId);
             if (fs) {
                 target = fs.p.map(v => v * scale);
-                document.getElementById('track').classList.remove('hidden');
-                document.getElementById('trT').textContent = fmtTime(snap.t);
-                document.getElementById('trXYZ').textContent = fs.p.map(v => v.toFixed(0)).join(' / ') + ' km'
             }
         }
         const eye = [target[0] + camera.dist * Math.cos(camera.pitch) * Math.cos(camera.yaw), target[1] + camera.dist * Math.sin(camera.pitch), target[2] + camera.dist * Math.cos(camera.pitch) * Math.sin(camera.yaw)];
         const mvp = mul(perspective(1.0, canvas.width / canvas.height, .01, 100), look(eye, target));
         gl.uniformMatrix4fv(gl.getUniformLocation(prog, "uMVP"), false, new Float32Array(mvp));
-        gl.drawArrays(gl.POINTS, 0, verts.length / 3);
+
+        gl.drawArrays(gl.POINTS, 0, vertsPoints.length / 3);
+        // update track panel info (XYZ, time, connections, list)
+        updateTrackPanel();
+
+        // Draw lines (if any)
+        if (vertsLines.length) {
+            // lines don't use sizes
+            gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertsLines), gl.DYNAMIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colsLines), gl.DYNAMIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+            gl.enableVertexAttribArray(locP);
+            gl.vertexAttribPointer(locP, 3, gl.FLOAT, false, 0, 0);
+            gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+            gl.enableVertexAttribArray(locC);
+            gl.vertexAttribPointer(locC, 3, gl.FLOAT, false, 0, 0);
+            // disable size attribute for lines
+            const locS2 = gl.getAttribLocation(prog, 'aSize'); if (locS2 >= 0) gl.disableVertexAttribArray(locS2);
+            gl.drawArrays(gl.LINES, 0, vertsLines.length / 3);
+        }
+
         drawCoverage(snap);
     }
 
@@ -896,8 +1024,8 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
                 lon = Math.atan2(p[1], p[0]), x = cx + Math.cos(lon) * Math.cos(lat) * er, y = cy - Math.sin(lat) * er;
             let rad = Math.max(14, Math.min(90, er * .28));
             let g = cc.createRadialGradient(x, y, 0, x, y, rad);
-            g.addColorStop(0, 'rgba(139,211,255,.16)');
-            g.addColorStop(1, 'rgba(139,211,255,0)');
+            g.addColorStop(0, 'rgba(80,150,110,.12)');
+            g.addColorStop(1, 'rgba(80,150,110,0)');
             cc.fillStyle = g;
             cc.beginPath();
             cc.arc(x, y, rad, 0, Math.PI * 2);
@@ -909,9 +1037,17 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
         dragging = true;
         lastX = e.clientX;
         lastY = e.clientY;
-        canvas.setPointerCapture(e.pointerId)
+        canvas.setPointerCapture(e.pointerId);
+        canvas._downX = e.clientX; canvas._downY = e.clientY; canvas._downT = Date.now();
     });
-    canvas.addEventListener("pointerup", () => dragging = false);
+    canvas.addEventListener("pointerup", e => {
+        // Handle click (small movement)
+        const dx = (e.clientX - (canvas._downX || 0));
+        const dy = (e.clientY - (canvas._downY || 0));
+        const dt = Date.now() - (canvas._downT || 0);
+        dragging = false;
+        if (Math.hypot(dx, dy) < 8 && dt < 400) handleCanvasClick(e);
+    });
     canvas.addEventListener("pointermove", e => {
         if (!dragging) return;
         camera.yaw += (e.clientX - lastX) * .006;
@@ -944,6 +1080,45 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
     $("#drop").addEventListener("dragleave", e => {
         if (e.target === $("#drop")) $("#drop").style.display = "none"
     });
+
+    // Handle clicking on satellites: toggle failure and follow
+    function handleCanvasClick(e) {
+        const snap = snapshots[+$("#timeRange").value];
+        if (!snap) return;
+        const scale = 1 / (R_E + scenario.environment.altitude_km);
+        let target = [0,0,0];
+        if (followId) { let fs = snap.sats.find(x=>x.id===followId); if (fs) target = fs.p.map(v=>v*scale); }
+        const eye = [target[0] + camera.dist * Math.cos(camera.pitch) * Math.cos(camera.yaw), target[1] + camera.dist * Math.sin(camera.pitch), target[2] + camera.dist * Math.cos(camera.pitch) * Math.sin(camera.yaw)];
+        const mvp = mul(perspective(1.0, canvas.width / canvas.height, .01, 100), look(eye, target));
+        const d = devicePixelRatio || 1;
+        let best = null, bestDist = 1e9;
+        for (const s of snap.sats) {
+            const p = s.p.map(v=>v*scale);
+            const clip = transformPoint(mvp, [p[0], p[1], p[2], 1]);
+            if (Math.abs(clip[3]) < 1e-6) continue;
+            const ndc = [clip[0]/clip[3], clip[1]/clip[3], clip[2]/clip[3]];
+            const sx = (ndc[0]*0.5 + 0.5) * canvas.width / d;
+            const sy = (1 - (ndc[1]*0.5 + 0.5)) * canvas.height / d;
+            const dist = Math.hypot(sx - e.clientX, sy - e.clientY);
+            if (dist < bestDist) { bestDist = dist; best = s }
+        }
+        if (best && bestDist < 12) {
+            // toggle failure for satellite
+            scenario.failures = scenario.failures || [];
+            const existing = scenario.failures.find(f => f.satellite_id === best.id);
+            if (existing) {
+                scenario.failures = scenario.failures.filter(f => f !== existing);
+                toast(`Восстановлен ${best.id}`);
+            } else {
+                scenario.failures.push({satellite_id: best.id, start_s: 0, end_s: scenario.environment.horizon_s || 86400});
+                toast(`Выведен из строя ${best.id}`);
+            }
+            followId = best.id;
+            setTrackList();
+            try { document.getElementById('satTrack').value = followId; } catch(e) {}
+            runCalc();
+        }
+    }
 
     // --- v3 controls / animation / full dump ---
     let playing = false, playTimer = null, coverageOn = true, followId = null;
@@ -1046,9 +1221,43 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
         setTimeout(() => URL.revokeObjectURL(a.href), 1000)
     }
 
+    // Play/pause/stop/faster/slower controls
+    document.getElementById('playPauseBtn').onclick = () => {
+        playing = !playing;
+        document.getElementById('playPauseBtn').textContent = playing ? 'Pause' : 'Play';
+        if (playing) {
+            lastAnimateTs = performance.now();
+            floatFrame = +document.getElementById('timeRange').value;
+            animate();
+        } else {
+            clearTimeout(playTimer);
+            lastAnimateTs = null;
+        }
+    };
+    document.getElementById('stopBtn').onclick = () => {
+        playing = false;
+        clearTimeout(playTimer);
+        floatFrame = 0;
+        lastAnimateTs = null;
+        document.getElementById('timeRange').value = 0;
+        renderFrame(0);
+        document.getElementById('playPauseBtn').textContent = 'Play';
+    };
+    document.getElementById('fasterBtn').onclick = () => {
+        realitySpeed = Math.min(REALITY_MAX, realitySpeed * 2);
+        syncParams();
+    };
+    document.getElementById('slowerBtn').onclick = () => {
+        realitySpeed = Math.max(REALITY_MIN, realitySpeed / 2);
+        syncParams();
+    };
+
     function setTrackList() {
         let el = document.getElementById('satTrack');
-        el.innerHTML = (scenario?.design?.satellites || []).map(x => `<option value="${x.id}">${x.id}</option>`).join('')
+        el.innerHTML = (scenario?.design?.satellites || []).map(x => `<option value="${x.id}">${x.id}</option>`).join('');
+        // preserve selection if possible
+        try { if (followId) el.value = followId; } catch (e) {}
+        updateTrackPanel();
     }
 
     document.getElementById('untrack').onclick = () => {
@@ -1058,19 +1267,99 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
     document.getElementById('satTrack').onchange = () => {
         followId = document.getElementById('satTrack').value;
         document.getElementById('track').classList.remove('hidden');
+        updateTrackPanel();
         renderFrame(+document.getElementById('timeRange').value)
+    };
+
+    // compute how many active ISL connections a satellite has in the current snapshot
+    function computeConnections(satId, snap) {
+        if (!snap) return 0;
+        const s = snap.sats.find(x => x.id === satId);
+        if (!s || !s.active) return 0;
+        const range = (scenario && scenario.environment && scenario.environment.isl_range_km) || 3000;
+        let cnt = 0;
+        for (const o of snap.sats) {
+            if (o.id === satId) continue;
+            if (!o.active) continue;
+            if (visibleMain(s.p, o.p, range)) cnt++;
+        }
+        return cnt;
+    }
+
+    function updateTrackPanel() {
+        const sel = document.getElementById('satTrack');
+        const sid = sel?.value;
+        const snap = snapshots[+document.getElementById('timeRange').value];
+        if (!sid) {
+            document.getElementById('trT').textContent = '—';
+            document.getElementById('trXYZ').textContent = '—';
+            document.getElementById('connCount').textContent = '—';
+            document.getElementById('satStatus').textContent = '—';
+            return;
+        }
+        followId = sid;
+        document.getElementById('track').classList.remove('hidden');
+        if (snap) {
+            const fs = snap.sats.find(x => x.id === sid);
+            if (fs) {
+                document.getElementById('trT').textContent = fmtTime(snap.t);
+                document.getElementById('trXYZ').textContent = fs.p.map(v => v.toFixed(0)).join(' / ') + ' km';
+                const conn = computeConnections(sid, snap);
+                document.getElementById('connCount').textContent = conn;
+                // list IDs
+                const list = [];
+                const range = (scenario.environment && scenario.environment.isl_range_km) || 3000;
+                for (const o of snap.sats) {
+                    if (o.id === sid) continue;
+                    if (!o.active) continue;
+                    if (visibleMain(fs.p, o.p, range)) list.push(o.id);
+                }
+                document.getElementById('connList').textContent = list.length ? list.join(', ') : '—';
+                // status: if scenario.failures contains it -> OFF, else use fs.active
+                const forced = (scenario.failures || []).some(f => f.satellite_id === sid);
+                document.getElementById('satStatus').textContent = forced ? 'OFF (forced)' : (fs.active ? 'ON' : 'OFF');
+                const tb = document.getElementById('toggleSatBtn');
+                if (forced || !fs.active) tb.textContent = 'Включить'; else tb.textContent = 'Выключить';
+            }
+        } else {
+            document.getElementById('trT').textContent = '—';
+            document.getElementById('trXYZ').textContent = '—';
+            document.getElementById('connCount').textContent = '—';
+            document.getElementById('satStatus').textContent = '—';
+            document.getElementById('connList').textContent = '—';
+        }
+    }
+
+    document.getElementById('toggleSatBtn').onclick = () => {
+        const sel = document.getElementById('satTrack');
+        const sid = sel?.value; if (!sid) return; scenario.failures = scenario.failures || [];
+        const existing = scenario.failures.find(f => f.satellite_id === sid);
+        if (existing) {
+            scenario.failures = scenario.failures.filter(f => f !== existing);
+            toast(`Восстановлен ${sid}`);
+        } else {
+            scenario.failures.push({satellite_id: sid, start_s: 0, end_s: scenario.environment.horizon_s || 86400});
+            toast(`Выведен из строя ${sid}`);
+        }
+        updateTrackPanel();
+        runCalc();
     };
 
     function animate() {
         if (!playing) return;
-        let r = document.getElementById('timeRange'), max = +r.max, cur = +r.value,
-            advance = Math.max(1, Math.round(realitySpeed));
-        let next = cur + Math.min(advance, INTEGRATOR_FRAME_LIMIT);
+        let r = document.getElementById('timeRange'), max = +r.max, cur = +r.value;
+        // compute milliseconds per simulation step based on realitySpeed (default ~1000ms per step)
+        const stepMs = Math.max(100, Math.min(5000, Math.round(1000 / Math.max(0.001, realitySpeed))));
+        let next = cur + 1;
         if (next > max) next = 0;
         r.value = next;
         renderFrame(next);
-        playTimer = setTimeout(animate, 35)
+        playTimer = setTimeout(animate, stepMs);
     }
+
+    // Smooth continuous playback state
+    let floatFrame = 0;
+    let lastAnimateTs = null;
 
     document.getElementById('calcBtn').onclick = () => runCalc();
     document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
