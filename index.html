@@ -691,9 +691,11 @@
                 $("#hops").textContent = stats.hops ?? "—";
                 $("#pbar").style.width = "100%";
                 $("#calcInfo").textContent = `${scenario.design.satellites.length} sats · ${snapshots.length} отсчётов`;
-                renderFrame(+$("timeRange").value);
+                renderFrame(+$("#timeRange").value);
                 log(`Модель жюри готова · доступность ${(stats.availability * 100).toFixed(2)}%`);
                 toast("Расчёт завершён");
+                playing = true;
+                animate();
             }
             if (m.type === "error") {
                 log("ERROR " + m.msg);
@@ -916,11 +918,11 @@ precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=lengt
         camera.pitch = Math.max(-1.45, Math.min(1.45, camera.pitch + (e.clientY - lastY) * .006));
         lastX = e.clientX;
         lastY = e.clientY;
-        renderFrame(+$("timeRange").value)
+        renderFrame(+$("#timeRange").value)
     });
     canvas.addEventListener("wheel", e => {
         camera.dist = Math.max(1.15, Math.min(14, camera.dist + e.deltaY * .003));
-        renderFrame(+$("timeRange").value)
+        renderFrame(+$("#timeRange").value)
     }, {passive: true});
     document.body.addEventListener("dragover", e => {
         e.preventDefault();
