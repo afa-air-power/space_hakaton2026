@@ -638,7 +638,7 @@
     $("#stage").oninput = () => {
         $("#stageVal").textContent = $("#stage").value + " / 3";
         scenario.design.launch_stage = +$("#stage").value;
-        renderFrame(+$("timeRange").value)
+        renderFrame(+$("#timeRange").value)
     }
     $("#loadBtn").onclick = () => $("#fileInput").click();
     $("#fileInput").onchange = async e => {
@@ -660,13 +660,13 @@
     $("#calcBtn").onclick = () => runCalc();
     $("#earthBtn").onclick = () => {
         camera = {yaw: .35, pitch: .23, dist: 3.4};
-        renderFrame(+$("timeRange").value)
+        renderFrame(+$("#timeRange").value)
     };
     $("#freeBtn").onclick = () => {
         camera = {yaw: 0.9, pitch: .65, dist: 6.5};
-        renderFrame(+$("timeRange").value)
+        renderFrame(+$("#timeRange").value)
     };
-    $("#timeRange").oninput = () => renderFrame(+$("timeRange").value);
+    $("#timeRange").oninput = () => renderFrame(+$("#timeRange").value);
 
     async function runCalc() {
         if (!scenario) applyScenario(demoScenario());
@@ -752,41 +752,41 @@ self.onmessage=({data})=>{
 }`;
 
     // WebGL2 renderer
-// WebGL2 — основной рендерер. Если контекст недоступен, интерфейс должен не падать,
-// а просто уйти в безопасный режим и оставить панель управления доступной.
-const canvas = $("#gl");
-const gl = canvas.getContext("webgl2", {antialias: true, alpha: false});
-if (!gl) {
-    $("#engine").textContent = "Canvas2D fallback";
-    toast("WebGL2 недоступен");
-}
-const vs = `#version 300 es
+    // WebGL2 — основной рендерер. Если контекст недоступен, интерфейс должен не падать,
+    // а просто уйти в безопасный режим и оставить панель управления доступной.
+    const canvas = $("#gl");
+    const gl = canvas.getContext("webgl2", {antialias: true, alpha: false});
+    if (!gl) {
+        $("#engine").textContent = "Canvas2D fallback";
+        toast("WebGL2 недоступен");
+    }
+    const vs = `#version 300 es
 in vec3 aPos;in vec3 aColor;uniform mat4 uMVP;out vec3 vColor;void main(){gl_Position=uMVP*vec4(aPos,1.0);gl_PointSize=5.5;vColor=aColor;}`;
-const fs = `#version 300 es
+    const fs = `#version 300 es
 precision highp float;in vec3 vColor;out vec4 outColor;void main(){float d=length(gl_PointCoord-vec2(.5));if(d>.5)discard;outColor=vec4(vColor,1.0);}`;
 
-function sh(type, src) {
-    if (!gl) return null;
-    let s = gl.createShader(type);
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    return s
-}
+    function sh(type, src) {
+        if (!gl) return null;
+        let s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        return s
+    }
 
-const prog = gl ? gl.createProgram() : null;
-if (prog) {
-    gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs));
-    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
-    gl.linkProgram(prog);
-}
-const posBuf = gl ? gl.createBuffer() : null;
-const colBuf = gl ? gl.createBuffer() : null;
+    const prog = gl ? gl.createProgram() : null;
+    if (prog) {
+        gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs));
+        gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
+        gl.linkProgram(prog);
+    }
+    const posBuf = gl ? gl.createBuffer() : null;
+    const colBuf = gl ? gl.createBuffer() : null;
 
     function resize() {
         const d = window.devicePixelRatio || 1;
         canvas.width = innerWidth * d;
         canvas.height = innerHeight * d;
-        gl.viewport(0, 0, canvas.width, canvas.height)
+        if (gl) gl.viewport(0, 0, canvas.width, canvas.height)
     }
 
     addEventListener("resize", resize);
